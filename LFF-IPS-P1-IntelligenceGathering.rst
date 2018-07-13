@@ -6,7 +6,6 @@ This post (always Work in Progress) lists technical steps which one can follow w
 
 Suppose, we are tasked with an external/ internal penetration test of a big organization with DMZ, Data centers, Telecom network etc. Moreover, the only information that we know at this moment is the company name and/or it’s domain name such as example.com 
 
-**Shout-outs (thanks) to the Vulnhub-ctf team, bonsaiviking, recrudesce, Rajesh and Tanoy**
 
 
 
