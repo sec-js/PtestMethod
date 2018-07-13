@@ -150,7 +150,6 @@ SpiderFoot is a reconnaissance tool that automatically queries over 100 public d
 
 
 
-
 Enumeration with Domain Name (e.g. example.com) using external websites
 -----------------------------------------------------------------------
 
@@ -210,7 +209,6 @@ Shodan Queries
   country : Search for results in a given country (2-letter code)
   city    : Search for results in a given city
 
-.. Todo :: Learn how to access Shodan with API
 
 * `Censys <https://censys.io/>`_ is a search engine that allows computer scientists to ask questions about the devices and networks that compose the Internet. Driven by Internet-wide scanning, Censys lets researchers find specific hosts and create aggregate reports on how devices, websites, and certificates are configured and deployed. A good feature is the Query metadata which tells the number of Http, https and other protocols found in the IP network range.
 
@@ -301,9 +299,6 @@ Aquatone: A tool for domain flyovers
 
 `Aquatone <https://github.com/michenriksen/aquatone>`_ is a set of tools for performing reconnaissance on domain names. It can discover subdomains on a given domain by using open sources as well as the more common subdomain dictionary brute force approach. After subdomain(s) discovery, AQUATONE can scan the identified hosts (subdomains) for common web ports and HTTP headers, HTML bodies and screenshots can be gathered and consolidated into a report for easy analysis of the attack surface. A detailed blog is available at `AQUATONE: A tool for domain flyovers <http://michenriksen.com/blog/aquatone-tool-for-domain-flyovers/>`_
 
-.. Todo:: move the earlier mention recon-ng, dnsenum, dnsrecon section?
-.. Todo:: provide an example?
-
 DataSploit
 ----------
 
@@ -323,21 +318,16 @@ Spiderfoot
 
 `SpiderFoot <http://www.spiderfoot.net/>`_ is an open source intelligence automation tool. Its goal is to automate the process of gathering intelligence about a given target, which may be an IP address, domain name, hostname or network subnet. SpiderFoot can be used offensively, i.e. as part of a black-box penetration test to gather information about the target or defensively to identify what information your organization is freely providing for attackers to use against you.
 
-.. Todo:: add example?
-
 Intrigue.io
 -----------
 
 `Intrigue <https://github.com/intrigueio/intrigue-core>`_ makes it easy to discover information about the attack surface connected to the Internet. Intrigue utilizes common OSINT sources via “tasks” to create “entities”. Each discovered entity can be used to discover more information, either automatically or manually.
 
-.. Todo:: to the Internet > about the attacker surface of a given domain/host connected to the Internet?
-
-.. Todo:: demo?
 
 Ivre: A tool for domain flyovers
 ---------------------------------
 
-`IVRE <http://www.ivre.rocks/>`_is an open-source framework for network recon. It relies on open-source well-known tools (Nmap, Zmap, Masscan, Bro and p0f) to gather data (network intelligence), stores it in a database (MongoDB), and provides tools to analyze it.
+`IVRE <http://www.ivre.rocks/>`_ is an open-source framework for network recon. It relies on open-source well-known tools (Nmap, Zmap, Masscan, Bro and p0f) to gather data (network intelligence), stores it in a database (MongoDB), and provides tools to analyze it.
 
 It includes a Web interface aimed at analyzing Nmap scan results (since it relies on a database, it can be much more efficient with huge scans than a tool like Zenmap, the Nmap GUI, for example).
 
@@ -352,5 +342,5 @@ MyGoTo
 5. Determine what kind of Info can be compromised
 6. Report
 
-> In case the enterprise wants to determine it's blue team capacities check multiple attack vectors and check if you get discovered.
+>  In case the enterprise wants to determine it's blue team capacities check multiple attack vectors and check if you get discovered.
 >
