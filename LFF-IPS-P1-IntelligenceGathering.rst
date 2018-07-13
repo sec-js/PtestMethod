@@ -8,17 +8,7 @@ Suppose, we are tasked with an external/ internal penetration test of a big orga
 
 **Shout-outs (thanks) to the Vulnhub-ctf team, bonsaiviking, recrudesce, Rajesh and Tanoy**
 
-Scenarios
-=========
 
-Mostly, there are only two scenarios either we are outside/ inside the organization.
-
-Outside - External
-------------------
-
-If we are outside or doing an external pentest. We need to figure out the attack surface area first.
-
-The could be achieved by answering the following questions:
 
 .. _question:
 
@@ -35,101 +25,6 @@ in the past.
 
 We might be able to compromise user credential(s) or running vulnerable service(s) and get 
 inside the internal network of the organization.
-
-Inside - Internal
------------------
-
-When we are inside the organization (let's say physically) there are two common situations:
-
-* Potentially, posing as an employee (already having access to the internal network).
-* External consultant (with no internal network access as of now). 
-
-Let's first explore what options we have as external consultant sitting in a conference room.
-
-Wired LAN
-^^^^^^^^^
-
-If there's a LAN cable laying around and we (obviously) plug it in our computer, the following situations can occur:
-
-* DHCP (Dynamic Host Configuration Protocol) is enabled and your machine is provided with an IP Address.
-* DHCP is disabled; however the LAN cable is working. In this case, we might be able to sniff the network and figure out the near-by IP Address, netmask and default gateway and configure our device to use a static IP.
-* Network Access Control is enabled, then probably we would need to search for 
-  
- * A device (such as printers) attached to network, clone it's MAC address and try again) or 
- * IP Phones or any Hub or 
- * Connect USB to LAN device to any already connected machine.
-
-* LAN port is disabled (We can't do much here! Can we?).
-
-.. Todo:: explain how to clone a mac
-
-Wireless LAN
-^^^^^^^^^^^^
-
-* Check for Open/ Guest Wi-Fi - If you are connected somehow try to access the internal network range(s). Most probably, the organization would have segregated the network properly. However, sometimes DNS Names can be resolved.
-* Check if any WEP/ WPA2 networks are present. If so, we can try to crack them.
-
-## Once you are inside, we need to find answers to the above questions (Outside - External section).
-
-.. Note:: Fingerprinting can be done from both Internal/ External of the organization
-
-.. Todo:: explain how to crack WEP/WPA2 
-
-Responder/ Inveigh
-^^^^^^^^^^^^^^^^^^
-
-Once, you are inside, probably the first thing would be to utilize **Responder** or **Inveigh** in **Analyze mode**.
-
-* `Responder <https://github.com/lgandx/Responder>`_ : Responder is a LLMNR, NBT-NS and MDNS poisoner, with built-in HTTP/ SMB/ MSSQL/ FTP/ LDAP rogue authentication server supporting NTLMv1/ NTLMv2/ LMv2, Extended Security NTLMSSP and Basic HTTP authentication. It is very important to understand LLMNR, NBT-NS. Understand the basics by reading the `Local Network Attacks: LLMNR and NBT-NS Poisoning <https://www.sternsecurity.com/blog/local-network-attacks-llmnr-and-nbt-ns-poisoning>`_, `What is LLMNR & WPAD and How to Abuse Them During Pentest ? <https://pentest.blog/what-is-llmnr-wpad-and-how-to-abuse-them-during-pentest/>`_  and `How to get Windows to give you credentials through LLMNR <https://www.pentestpartners.com/security-blog/how-to-get-windows-to-give-you-credentials-through-llmnr/>`_
-
- Basically it's like this
-
- * A user wants to access a file server named "NAS001" by \\\\NAS001, however, mistakenly types \\\\NAS01.  
- * The query goes to the DNS server to resolve the IP address of NAS01. However, as it's not a valid hostname, DNS Server responds to the user saying that it doesn’t know that host.
- * The user broadcasts on the local network and asks if anyone knows who is \\\\NAS01
- * The attacker (if on the same network) seizing the opportunity says "I am NAS01 here is my IP Address"
- * The user believes the attacker and sends its own username and NTMLv2 hash to the attacker.
- * The attacker gathers all the hashes and cracks them (offline) to gain password.
-
- Recently, Responder also got the functionality to act as a Multi-relay, which allows you to relay the NTLMv1/2 authentication to a specific target and possibly execute code (during a successful attack) on the target node. NotSoSecure has written a detailed blog on this technique: `Pwning with Responder – A Pentester’s Guide <https://www.notsosecure.com/pwning-with-responder-a-pentesters-guide/>`_ 
-
- Similar to Python Responder, there is Inveigh
-
-* `Inveigh <https://github.com/Kevin-Robertson/Inveigh>`_ is a PowerShell LLMNR/ mDNS/ NBNS spoofer and man-in-the-middle tool designed to assist penetration testers and red teamers that find themselves limited to a Windows system.
-
-.. Todo:: eloborate on Inveigh?
-
-NTLM/ NTLMv1/v2 / Net-NTLMv1/v2
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The Responder/ Inveigh tools and the hashes NTLM/ NTLMv1/v2 / Net-NTLMv1/v2 are Windows environment specific.
-
-
-*Probably, we should cover this in Exploitation phase. However as we have just mentioned Responder/ Inveigh here, it makes sense to include this here*
-
-* NTLM: NTLM hashes are stored in the Security Account Manager (SAM) database and in the Domain Controller's NTDS.dit database. 
-
- ::
-
-  aad3b435b51404eeaad3b435b51404ee:e19ccf75ee54e06b06a5907af13cef42
-
- The LM hash is the one before the semicolon (:) and the NT hash is the one after the semicolon. Starting with Windows Vista and Windows Server 2008, by default, only the NT hash is stored.
-
-* NTLMv1/v2 / Net-NTLMv1/v2 : Net-NTLM hashes are used for network authentication (they are derived from a challenge/response algorithm and are based on the user's NT hash). Here is an example of a Net-NTLMv2 (a.k.a NTLMv2) hash:
-
- ::
-
-  admin::N46iSNekpT:08ca45b7d7ea58ee:88dcbe4446168966a153a0064958dac6:5c7830315c7830310000000000000b45c67103d07d7b95acd12ffa11230e0000000052920b85f78d013c31cdb3b92f5d765c783030 
-
-From a pentesting perspective:
-
-* You CAN perform Pass-The-Hash attacks with NTLM hashes.
-* You CANNOT perform Pass-The-Hash attacks with Net-NTLM hashes.
-
-.. Todo:: so Net-NTLM needs to be cracked, how?
-
-The above has been taken from `Practical guide to NTLM Relaying in 2017 (A.K.A getting a foothold in under 5 minutes) <https://byt3bl33d3r.github.io/practical-guide-to-ntlm-relaying-in-2017-aka-getting-a-foothold-in-under-5-minutes.html>`_ He has explained it very well and also showed how to own the network using relaying the hashes from Responder to get a system shell. Another good blog to understand this is `SMB Relay Demystified and NTLMv2 Pwnage with Python <https://pen-testing.sans.org/blog/pen-testing/2013/04/25/smb-relay-demystified-and-ntlmv2-pwnage-with-python>`_
-
 
 Fingerprinting
 ==============
@@ -215,11 +110,9 @@ Hurricane Electric Internet Services also provide a website `BGPToolkit <http://
 
 .. Todo ::  Commandline checking of subnet and making whois query efficient.
 
-Recon-ng
+Recon-ng <https://bitbucket.org/LaNMaSteR53/recon-ng/wiki/Usage%20Guide>
 ^^^^^^^^
 
-.. Todo:: Add the following line to unconfuse people?
-.. Todo:: Note that is this context hosts are subdomains
 
 * use recon/domains-hosts/bing\_domain\_web : Harvests hosts from Bing.com by using the site search operator.
 * use recon/domains-hosts/google\_site\_web : Harvests hosts from google.com by using the site search operator.
@@ -227,12 +120,8 @@ Recon-ng
 * use recon/hosts-hosts/resolve : Resolves the IP address for a host.
 * use reporting/csv : Creates a CSV file containing the specified harvested data.
 
-Jason Haddix has created a dynamic resource script for sub-domain discovery which is available `here <https://github.com/jhaddix/domain>`__. Simply provide the domain name and it runs the necessary modules, creates a new workspace and save the report.
-         
-.. Todo :: Check API option too, why google\_site\_web is failing, add a module to add ASN Info and Location Info too.
-        
 
-The Harvester
+The Harvester <https://github.com/laramies/theHarvester>
 ^^^^^^^^^^^^^
 
 The harvester provides email addresses, virtual hosts, different domains, shodan results etc. for the domain. It provides really good results, especially if you combine with shodan results as it may provide server versions and what's OS is running on a provided IP address.
@@ -252,7 +141,14 @@ The harvester provides email addresses, virtual hosts, different domains, shodan
      -h: use SHODAN database to query discovered hosts             |
          
 
-.. Todo :: Combine these results with recon-ng and DNS Dumpsters and create one csv with all results.
+
+
+Spiderfoot <http://www.spiderfoot.net/download/>
+^^^^^^^^^^^^^
+
+SpiderFoot is a reconnaissance tool that automatically queries over 100 public data sources (OSINT) to gather intelligence on IP addresses, domain names, e-mail addresses, names and more. You simply specify the target you want to investigate, pick which modules to enable and then SpiderFoot will collect data to build up an understanding of all the entities and how they relate to each other.
+
+
 
 
 Enumeration with Domain Name (e.g. example.com) using external websites
@@ -274,6 +170,9 @@ and the various dns queries by
 :: 
 
   curl -s http://api.hackertarget.com/dnslookup/?q=example.com > dnslookup      
+  
+  
+  .. Todo :: Combine these results with recon-ng, spiderfoot and DNS Dumpsters and create one csv with all results.
 
 Google Dorks (search operators)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -288,7 +187,6 @@ Three good places to refer are `Search Operators <https://support.google.com/web
 Other Tools
 ^^^^^^^^^^^
 
-* `Mcafee Site Digger <http://www.mcafee.com/in/downloads/free-tools/sitedigger.aspx>`__ searches Google’s cache to look for vulnerabilities, errors, configuration issues,proprietary information, and interesting security nuggets on web sites.
 * `SearchDiggityv3 <http://www.bishopfox.com/resources/tools/google-hacking-diggity/attack-tools/>`__ is Bishop Fox’s MS Windows GUI application that serves as a front-end to the most recent versions of our Diggity tools: GoogleDiggity, BingDiggity, Bing, LinkFromDomainDiggity, CodeSearchDiggity, DLPDiggity, FlashDiggity, MalwareDiggity, PortScanDiggity, SHODANDiggity, BingBinaryMalwareSearch, and NotInMyBackYard Diggity.
 
 
@@ -334,7 +232,7 @@ DomainTools Reverse IP Lookup
 
 PassiveTotal
 ^^^^^^^^^^^^
-`Passive Total <https://www.passivetotal.org/>`__ : A threat-analysis platform created for analysts, by analysts.
+`Passive Total <https://community.riskiq.com//>`__ : A threat-analysis platform created for analysts, by analysts.
 
 Server-Sniff
 ^^^^^^^^^^^^
@@ -918,27 +816,22 @@ Intrigue.io
 
 .. Todo:: demo?
 
-Appendix-I : Interesting Stories
-================================
+Ivre: A tool for domain flyovers
+---------------------------------
 
-Initial Compromise
--------------------
+`IVRE <http://www.ivre.rocks/>`_is an open-source framework for network recon. It relies on open-source well-known tools (Nmap, Zmap, Masscan, Bro and p0f) to gather data (network intelligence), stores it in a database (MongoDB), and provides tools to analyze it.
 
-* `Apache and Java Information Disclosures Lead to Shells <http://threat.tevora.com/apache-and-java-information-disclosures-lead-to-shells/>`_ : Richard De La Cruz talks about a recent Red-Team engagement, where a series of information disclosures were discovered on a site allowing the team to go from zero access to full compromise in a matter of hours.
-
-Summary:
-
- * Information disclosures in Apache HTTP servers with mod_status enabled allowed our team to discover .jar files, hosted on the site.
- * Static values within the exposed .jar files allowed our team to extract the client’s code signing certificate and sign malicious Java executables as the client.
- * These malicious .jar files were used in a successful social engineering campaign against the client.
-
-.. Todo:: A lot of tools are being mentioned in this blog article. It might therefore be interesting to give a run down. Which might be highly situationals
-
-Changelog
-=========
-.. git_changelog::
-  :filename_filter: docs/LFF-IPS-P1-IntelligenceGathering.rst
-  :hide_date: false
+It includes a Web interface aimed at analyzing Nmap scan results (since it relies on a database, it can be much more efficient with huge scans than a tool like Zenmap, the Nmap GUI, for example).
 
 
-.. disqus::
+MyGoTo
+==============
+
+1. Launch Spidefoot, Recon-ng, dicsover
+2. Launch Ivre on the network with T0 ot proxycanon
+3. Determine vulnerabilities and threat vectors
+4. Check Possibility of the attacks
+5. Determine what kind of Info can be compromised
+6. Report
+
+> In case the enterprise wants to determine it's blue team capacities check multiple attack vectors and check if you get discovered.
