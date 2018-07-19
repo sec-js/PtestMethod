@@ -330,6 +330,38 @@ Ivre: A tool for domain flyovers
 
 It includes a Web interface aimed at analyzing Nmap scan results (since it relies on a database, it can be much more efficient with huge scans than a tool like Zenmap, the Nmap GUI, for example).
 
+### How to tune Nmap in ivre ?
+
+/etc/ivre.conf
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+NMAP_SCAN_TEMPLATES["noping"]= {
+     "traceroute": "True",
+     "osdetect": "True",
+     "pings": "n",
+     "ports": "more",
+     "resolve": "1",
+     "extra_options": ['-T2', '-sC'],
+     "verbosity": 2,
+     "host_timeout": "15m",
+     "script_timeout": "2m",  # default value: None
+     "scripts_categories": ['default', 'discovery', 'auth'],
+     "scripts_exclude": ['broadcast', 'brute', 'dos', 'exploit', 'external', 'fuzzer',
+                            'intrusive'],  # default value: None
+   # "scripts_force": None,
+# "extra_options": None,
+}
+
+NMAP_SCAN_TEMPLATES["aggressive"] = NMAP_SCAN_TEMPLATES["default"].copy()
+NMAP_SCAN_TEMPLATES["aggressive"].update({
+     "host_timeout": "30m",
+     "script_timeout": "5m",
+     "scripts_categories": ['default', 'discovery', 'auth', 'brute',
+                            'exploit', 'intrusive'],
+     "scripts_exclude": ['broadcast', 'external']
+ })
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 
 MyGoTo
 ==============
