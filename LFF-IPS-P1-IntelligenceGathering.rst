@@ -362,6 +362,34 @@ NMAP_SCAN_TEMPLATES["aggressive"].update({
  })
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+### How to get all CN certs from ivre ?
+
+**From Scancli**
+
+~~~~
+ ivre scancli --distinct ports.scripts.ssl-cert.subject.
+~~~~
+
+OR
+
+~~~~
+ ivre scancli --distinct ports.scripts.ssl-cert.subject | python -c "import ast,json,sys
+for l in sys.stdin: print(json.dumps(ast.literal_eval(l)))" | jq .commonName
+~~~~
+
+**From Python API**
+
+~~~~
+ db.nmap.searchscript(name='ssl-cert', values={'subject.commonName': {'$exists': True}}) or, preferably 
+~~~~
+
+OR
+
+~~~~
+db.nmap.searchscript(name='ssl-cert', values={'subject.commonName': re.compile('')} 
+~~~~
+
+> Not formally the same meaning, but the latter is more portable and should work with PostgreSQL backend.
 
 MyGoTo
 ==============
