@@ -333,11 +333,15 @@ Ivre: A tool for domain flyovers
 
 It includes a Web interface aimed at analyzing Nmap scan results (since it relies on a database, it can be much more efficient with huge scans than a tool like Zenmap, the Nmap GUI, for example).
 
-### How to tune Nmap in ivre ?
 
-/etc/ivre.conf
+How to tune Nmap in ivre ?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The Configuration file is : /etc/ivre.conf
+
 
 :: 
+
 
 NMAP_SCAN_TEMPLATES["noping"]= {
      "traceroute": "True",
@@ -364,8 +368,9 @@ NMAP_SCAN_TEMPLATES["aggressive"].update({
      "scripts_exclude": ['broadcast', 'external']
  })
 
-### How to get all CN certs from ivre ?
 
+How to get all CN certs from ivre ?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 **From Scancli**
 
 :: 
