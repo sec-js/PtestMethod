@@ -1,5 +1,5 @@
 ***************************************************************
-Infrastructure PenTest Series : Part 1 - Intelligence Gathering
+Intelligence Gathering
 ***************************************************************
 
 This post (always Work in Progress) lists technical steps which one can follow while gathering information about an organization. 
