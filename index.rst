@@ -20,8 +20,11 @@ The Essentials Series covers the essential concepts/ skills for somebody who wan
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: The Essentials
 
+   LFF-ESS-P0A-CyberSecurityEnterprise
+   LFF-ESS-P0B-LinuxEssentials
+   
 
 #############################
 Infrastructure Pentest Series
@@ -38,7 +41,25 @@ The Infrastructure Pentest Series cover all the phases of Infrastructure Pentest
 - :doc:`Configuration Review <LFF-IPS-P6-ConfigurationReview>`     : Methods to perform configuration review for the switches, routers, firewall and endpoint devices.
 
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Pentest Stages
 
+    	LFF-IPS-P1-IntelligenceGathering
+      LFF-IPS-P2-VulnerabilityAnalysis
+      LFF-IPS-P3-Exploitation
+      LFF-IPS-P4-PostExploitation
+      LFF-IPS-P5-Reporting
+      LFFWirelessPentesting
+
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Remediation
+
+    	LFF-IPS-P6-ConfigurationReview
+      LFFSecuringDebian
+      
 
 #####################
 Obligatory Disclaimer
