@@ -1,5 +1,5 @@
 ************************************************************
-Infrastruture PenTest Series : Part 6 - Configuration Review
+Configuration Review
 ************************************************************
 
 So far, we have discussed about the IT infrastructure penetration testing in which plethora of attacking methods, tools, commands were explained. Now it's time get our hands dirty with the secure configuration re`view of network devices. 
