@@ -225,10 +225,12 @@ Even after doing the above, sometimes we miss few of the domain name. Example: R
 
 DomainTools Reverse IP Lookup
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 `Reverse IP Lookup by Domaintools <http://reverseip.domaintools.com>`__: Domain name search tool that allows a wildcard search, monitoring of WHOIS record changes and history caching, as well as Reverse IP queries.
 
 PassiveTotal
 ^^^^^^^^^^^^
+
 `Passive Total <https://community.riskiq.com//>`__ : A threat-analysis platform created for analysts, by analysts.
 
 Server-Sniff
@@ -238,6 +240,7 @@ Server-Sniff
 
 Robtex
 ^^^^^^
+
 `Robtex <https://www.robtex.com/>`__ : Robtex is one of the world's largest network tools. At robtex.com, you will find everything you need to know about domains, DNS, IP, Routes, Autonomous Systems, etc. There's a nmap nse `http-robtex-reverse-ip <https://nmap.org/nsedoc/scripts/http-robtex-reverse-ip.html>`__ which can be used to find the domain/ website hosted on that ip.
 
 ::
@@ -334,7 +337,8 @@ It includes a Web interface aimed at analyzing Nmap scan results (since it relie
 
 /etc/ivre.conf
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+:: 
+
 NMAP_SCAN_TEMPLATES["noping"]= {
      "traceroute": "True",
      "osdetect": "True",
@@ -351,7 +355,6 @@ NMAP_SCAN_TEMPLATES["noping"]= {
    # "scripts_force": None,
 # "extra_options": None,
 }
-
 NMAP_SCAN_TEMPLATES["aggressive"] = NMAP_SCAN_TEMPLATES["default"].copy()
 NMAP_SCAN_TEMPLATES["aggressive"].update({
      "host_timeout": "30m",
@@ -360,34 +363,37 @@ NMAP_SCAN_TEMPLATES["aggressive"].update({
                             'exploit', 'intrusive'],
      "scripts_exclude": ['broadcast', 'external']
  })
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ### How to get all CN certs from ivre ?
 
 **From Scancli**
 
-~~~~
+:: 
+
  ivre scancli --distinct ports.scripts.ssl-cert.subject.
-~~~~
+
 
 OR
 
-~~~~
+:: 
+
  ivre scancli --distinct ports.scripts.ssl-cert.subject | python -c "import ast,json,sys
 for l in sys.stdin: print(json.dumps(ast.literal_eval(l)))" | jq .commonName
-~~~~
+
 
 **From Python API**
 
-~~~~
+:: 
+
  db.nmap.searchscript(name='ssl-cert', values={'subject.commonName': {'$exists': True}}) or, preferably 
-~~~~
+
 
 OR
 
-~~~~
+:: 
+
 db.nmap.searchscript(name='ssl-cert', values={'subject.commonName': re.compile('')} 
-~~~~
+
 
 > Not formally the same meaning, but the latter is more portable and should work with PostgreSQL backend.
 
