@@ -50,6 +50,7 @@ The Infrastructure Pentest Series cover all the phases of Infrastructure Pentest
    LFF-IPS-P3-Exploitation
    LFF-IPS-P4-PostExploitation
    LFF-IPS-P5-Reporting
+   LFF-IPS-P6-ConfigurationReview
    LFFWirelessPentesting
 
 
@@ -57,7 +58,6 @@ The Infrastructure Pentest Series cover all the phases of Infrastructure Pentest
    :maxdepth: 2
    :caption: Remediation
 
-   LFF-IPS-P6-ConfigurationReview
    LFFSecuringDebian
       
 
