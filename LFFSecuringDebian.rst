@@ -1,4 +1,4 @@
-Learning from the field : Securing your Debian
+Securing your Debian
 =================================================
 
 Recently, we got an extra laptop with decent configuration to host as a server. We decided to host Kali-Linux on it and make available multiple vulnerable OS from vulnhub.com on it for practice to our teams.
