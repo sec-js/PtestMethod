@@ -357,7 +357,7 @@ The Configuration file is : /etc/ivre.conf
                             'intrusive'],  # default value: None
      # "scripts_force": None,
      # "extra_options": None,
-}
+  }
 
 
 :: 
@@ -369,7 +369,7 @@ The Configuration file is : /etc/ivre.conf
      "scripts_categories": ['default', 'discovery', 'auth', 'brute',
                             'exploit', 'intrusive'],
      "scripts_exclude": ['broadcast', 'external']
- })
+  })
 
 
 How to get all CN certs from ivre ?
