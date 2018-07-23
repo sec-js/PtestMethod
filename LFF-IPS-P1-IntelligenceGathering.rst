@@ -359,6 +359,9 @@ The Configuration file is : /etc/ivre.conf
      # "extra_options": None,
 }
 
+
+:: 
+
   NMAP_SCAN_TEMPLATES["aggressive"] = NMAP_SCAN_TEMPLATES["default"].copy()
   NMAP_SCAN_TEMPLATES["aggressive"].update({
      "host_timeout": "30m",
