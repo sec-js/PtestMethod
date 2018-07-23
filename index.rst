@@ -45,20 +45,20 @@ The Infrastructure Pentest Series cover all the phases of Infrastructure Pentest
    :maxdepth: 2
    :caption: Pentest Stages
 
-    	LFF-IPS-P1-IntelligenceGathering
-      LFF-IPS-P2-VulnerabilityAnalysis
-      LFF-IPS-P3-Exploitation
-      LFF-IPS-P4-PostExploitation
-      LFF-IPS-P5-Reporting
-      LFFWirelessPentesting
+   LFF-IPS-P1-IntelligenceGathering
+   LFF-IPS-P2-VulnerabilityAnalysis
+   LFF-IPS-P3-Exploitation
+   LFF-IPS-P4-PostExploitation
+   LFF-IPS-P5-Reporting
+   LFFWirelessPentesting
 
 
 .. toctree::
    :maxdepth: 2
    :caption: Remediation
 
-    	LFF-IPS-P6-ConfigurationReview
-      LFFSecuringDebian
+   LFF-IPS-P6-ConfigurationReview
+   LFFSecuringDebian
       
 
 #####################
