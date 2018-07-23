@@ -342,7 +342,6 @@ The Configuration file is : /etc/ivre.conf
 
 :: 
 
-
 NMAP_SCAN_TEMPLATES["noping"]= {
      "traceroute": "True",
      "osdetect": "True",
@@ -359,6 +358,7 @@ NMAP_SCAN_TEMPLATES["noping"]= {
    # "scripts_force": None,
 # "extra_options": None,
 }
+
 NMAP_SCAN_TEMPLATES["aggressive"] = NMAP_SCAN_TEMPLATES["default"].copy()
 NMAP_SCAN_TEMPLATES["aggressive"].update({
      "host_timeout": "30m",
