@@ -24,7 +24,7 @@ The Essentials Series covers the essential concepts/ skills for somebody who wan
 
    LFF-ESS-P0A-CyberSecurityEnterprise
    LFF-ESS-P0B-LinuxEssentials
-   
+
 
 #############################
 Infrastructure Pentest Series
@@ -54,12 +54,22 @@ The Infrastructure Pentest Series cover all the phases of Infrastructure Pentest
    LFFWirelessPentesting
 
 
+#############################
+Remediation / Hardening Series
+#############################
+
+The Remediation / Hardening Series cover all the phases as described by
+`The Penetration Testing Execution Standard <http://www.pentest-standard.org/>`_.
+
+- :doc:`Securing Debian <LFFSecuringDebiang>` : Technical steps to harden Debian systems.
+
+
 .. toctree::
    :maxdepth: 2
    :caption: Remediation
 
    LFFSecuringDebian
-      
+
 
 #####################
 Obligatory Disclaimer
