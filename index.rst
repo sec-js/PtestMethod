@@ -58,16 +58,33 @@ The Infrastructure Pentest Series cover all the phases of Infrastructure Pentest
 Hardening Series
 #############################
 
-The Hardening Series cover all the procedures needed to be more secure.
+  The Hardening Series cover all the procedures needed to be more secure.
 
-- :doc:`Securing Debian <LFFSecuringDebiang>` : Technical steps to harden Debian systems.
+      - :doc:`Securing Debian <LFFSecuringDebiang>` : Technical steps to harden Debian systems.
+
+
+      .. toctree::
+         :maxdepth: 2
+         :caption: Remediation
+
+         LFFSecuringDebian
+
+#############################
+Tools Documentation
+#############################
+
+Here you will find the documentation of the main tools.
+
+- :doc:`Metasploit Fundamentams <MetasploitFundamentals>` : How to use Metasploit. Forked from metasploit unlished.
+
 
 
 .. toctree::
    :maxdepth: 2
-   :caption: Remediation
+   :caption: Tools Docs
 
-   LFFSecuringDebian
+   MetasploitFundamentals
+
 
 
 #####################
