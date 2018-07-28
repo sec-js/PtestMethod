@@ -7,7 +7,7 @@ This blog is about the Cybersecurity in an Enterprise. We would start with a sim
 * How the company can be made secure?
 * What are the challenges faced by the administrators?
 * How we can make things easy/ automate for the administrators of the company.
-  
+
 Hopefully this will provide a general life-cycle of what happens and how things/ security evolve at companies.
 
 Nomenclature
@@ -26,7 +26,7 @@ New Company
 
 Two friends Alice and Bob met up and decided to open a company called Fantastic Solutions. Alice loves Linux (Debian) and Bob loves Windows. So, let's see what they require at this current point of time?
 
-Current Users 
+Current Users
 -------------
 
 2 Users
@@ -48,7 +48,7 @@ Home Router with builtin Wi-Fi
 * WPA (Wi-Fi Protected Access)
 * WPA2-Enterprise
 * Hidden SSID (Service Set IDentifier)
-* Home Router DNS Entry: No-Ads DNS Servers - free, global Domain Name System (DNS) resolution service, that you can use to block unwanted ads. Few examples are 
+* Home Router DNS Entry: No-Ads DNS Servers - free, global Domain Name System (DNS) resolution service, that you can use to block unwanted ads. Few examples are
 
  * `Adguard DNS <https://adguard.com/en/adguard-dns/overview.html>`_
  * `OpenDNS <https://www.opendns.com/>`_
@@ -74,6 +74,7 @@ Security Additions
 * Windows - `Microsoft Baseline Security Analyzer <https://www.microsoft.com/en-in/download/details.aspx?id=7558>`_ provides a streamlined method to identify missing security updates and common security misconfigurations.
 * Linux/ Mac - `Lynis <https://cisofy.com/lynis/>`_ is an open source security auditing tool. Used by system administrators, security professionals and auditors to evaluate the security defenses of their Linux and UNIX-based systems. It runs on the host itself, so it performs more extensive security scans than vulnerability scanners.
 * File Server (NAS) - Access control lists on folders defining which folder can be accessed by which user or password protected folders.
+* Firewall - Installing a Firewall just after the Router could permit to block unwanted traffic.
 
 Operations Issues
 -----------------
@@ -104,7 +105,7 @@ A DNS server hosts the information that enables client computers to resolve memo
 
 Windows Server Update Services (WSUS) Server
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Windows Server Update Services (WSUS) enables information technology administrators to deploy the latest Microsoft product updates. A WSUS server can be the update source for other WSUS servers within the organization. Refer `Deploy Windows Server Update Services in Your Organization <https://technet.microsoft.com/en-us/library/hh852340(v=ws.11).aspx>`_ 
+Windows Server Update Services (WSUS) enables information technology administrators to deploy the latest Microsoft product updates. A WSUS server can be the update source for other WSUS servers within the organization. Refer `Deploy Windows Server Update Services in Your Organization <https://technet.microsoft.com/en-us/library/hh852340(v=ws.11).aspx>`_
 
 DHCP Server
 ^^^^^^^^^^^
@@ -119,12 +120,12 @@ Others
 Operations Issues
 -----------------
 
-* How to manage multiple Linux machines and make sure they are hardened and compliant to security standards such as `CIS <https://www.cisecurity.org/cis-benchmarks/>`_ (Center for Internet Security) or `STIG <https://www.stigviewer.com/stigs>`_ (Security Technical Implementation Guide). 
+* How to manage multiple Linux machines and make sure they are hardened and compliant to security standards such as `CIS <https://www.cisecurity.org/cis-benchmarks/>`_ (Center for Internet Security) or `STIG <https://www.stigviewer.com/stigs>`_ (Security Technical Implementation Guide).
 
 Minimum Baseline Security Standard (MBSS)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 * `STIG <https://www.stigviewer.com/stigs>`_ : A Security Technical Implementation Guide (STIG) is a cybersecurity methodology for standardizing security protocols within networks, servers, computers, and logical designs to enhance overall security. These guides, when implemented, enhance security for software, hardware, physical and logical architectures to further reduce vulnerabilities.
- 
+
 * `CIS <https://www.cisecurity.org/cis-benchmarks/>`_ : CIS Benchmarks help you safeguard systems, software, and networks against today's evolving cyber threats. Developed by an international community of cybersecurity experts, the CIS Benchmarks are configuration guidelines for over 100 technologies and platforms.
 
 Security Additions
@@ -137,9 +138,9 @@ Security Compliance Manager
 
 Security Compliance Toolkit
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The Microsoft `Security Configuration Toolkit <https://www.microsoft.com/en-us/download/details.aspx?id=55319>`_ enables enterprise security administrators to effectively manage their enterprise’s Group Policy Objects (GPOs).  Using the toolkit, administrators can compare their current GPOs with Microsoft-recommended GPO baselines or other baselines, edit them, store them in GPO backup file format, and apply them via a Domain Controller or inject them directly into testbed hosts to test their effects. The Security Configuration Toolkit consists of two tools, Policy Analyzer and LGPO, and a set of configuration baselines for different releases of Windows. 
+The Microsoft `Security Configuration Toolkit <https://www.microsoft.com/en-us/download/details.aspx?id=55319>`_ enables enterprise security administrators to effectively manage their enterprise’s Group Policy Objects (GPOs).  Using the toolkit, administrators can compare their current GPOs with Microsoft-recommended GPO baselines or other baselines, edit them, store them in GPO backup file format, and apply them via a Domain Controller or inject them directly into testbed hosts to test their effects. The Security Configuration Toolkit consists of two tools, Policy Analyzer and LGPO, and a set of configuration baselines for different releases of Windows.
 
-* Policy Analyzer : Policy Analyzer is a utility for analyzing and comparing sets of Group Policy Objects (GPOs). It can highlight when a set of Group Policies has redundant settings or internal inconsistencies and then highlight the differences between versions or sets of Group Policies. It can also compare GPOs against current local policy settings, local registry settings, and then export results to a Microsoft Excel spreadsheet. 
+* Policy Analyzer : Policy Analyzer is a utility for analyzing and comparing sets of Group Policy Objects (GPOs). It can highlight when a set of Group Policies has redundant settings or internal inconsistencies and then highlight the differences between versions or sets of Group Policies. It can also compare GPOs against current local policy settings, local registry settings, and then export results to a Microsoft Excel spreadsheet.
 
 * LGPO : LGPO is a tool for transferring Group Policy directly between a host’s registry and a GPO backup file, bypassing the Domain Controller.  This gives administrators a simple way to verify the effects of their Group Policy settings directly.
 
@@ -158,7 +159,7 @@ Infrastructure Automation Tools
 Automation Tools Addition
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If we are utilizing Automation Tools above, there are few other tools which should be known such as 
+If we are utilizing Automation Tools above, there are few other tools which should be known such as
 
 * `Inspec <https://www.chef.io/inspec/>`_ : InSpec is an open-source testing framework for infrastructure with a human-readable language for specifying compliance, security and other policy requirements. When compliance is code, you can integrate automated tests that check for adherence to policy into any stage of your deployment pipeline.
 
@@ -177,9 +178,9 @@ Linters
 
 * `rst-lint <https://github.com/twolfson/restructuredtext-lint>`_ : Restructured Text Linter
 
-* PHP 
+* PHP
 
-  * php 
+  * php
 
    ::
 
@@ -189,23 +190,23 @@ Linters
 
   * `phpmd <https://phpmd.org/>`_ - PHP Mess Detector takes a given PHP source code base and look for several potential problems within that source such as Possible bugs, Suboptimal code, Overcomplicated expressions, Unused parameters, methods, properties.
 
-* HTML  
+* HTML
 
- * `TIDY <https://www.w3.org/People/Raggett/tidy/>`_ 
-   
+ * `TIDY <https://www.w3.org/People/Raggett/tidy/>`_
+
 Security Breach 1
 =================
 
 Let's assume a security breach happened at this point of time.
 
-* Customer data was ex-filtrated from one of the internal servers. 
+* Customer data was ex-filtrated from one of the internal servers.
 * A mis-configured web-application server was exploited and the Product website was defaced.
 * Open SMTP Server: A internal employee was able to send a email posing as CFO and asked the finance department to transfer money to attackers bank.
 
 Security Additions
 ------------------
 
-ELK (Elasticsearch, Logstash, and Kibana) 
+ELK (Elasticsearch, Logstash, and Kibana)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * `Elasticsearch <https://www.elastic.co/products/elasticsearch>`_ : Elasticsearch is a distributed, RESTful search and analytics engine capable of solving a growing number of use cases. As the heart of the Elastic Stack, it centrally stores your data so you can discover the expected and uncover the unexpected.
@@ -224,16 +225,16 @@ Windows Event Forwarding (WEF) reads any operational or administrative event log
  * Local users being created or deleted on member systems
  * New Services being installed, particularly on Domain Controllers (as this is often an indicator of malware or lateral movement behavior.)
 
-* Microsoft's `Use Windows Event Forwarding to help with intrusion detection <https://docs.microsoft.com/en-us/windows/threat-protection/use-windows-event-forwarding-to-assist-in-instrusion-detection>`_ 
+* Microsoft's `Use Windows Event Forwarding to help with intrusion detection <https://docs.microsoft.com/en-us/windows/threat-protection/use-windows-event-forwarding-to-assist-in-instrusion-detection>`_
 
-* Russell Tomkins has written a blog on creating `Creating Custom Windows Event Forwarding Logs <https://blogs.technet.microsoft.com/russellt/2016/05/18/creating-custom-windows-event-forwarding-logs/>`_ 
+* Russell Tomkins has written a blog on creating `Creating Custom Windows Event Forwarding Logs <https://blogs.technet.microsoft.com/russellt/2016/05/18/creating-custom-windows-event-forwarding-logs/>`_
 
- * Answers the question of "We don't want everything in Forwarded Events, can we create separate logs for my subscriptions?" 
+ * Answers the question of "We don't want everything in Forwarded Events, can we create separate logs for my subscriptions?"
 
-* Russell Tomkins has written another blog on `Introducing Project Sauron – Centralised Storage of Windows Events – Domain Controller Edition <https://blogs.technet.microsoft.com/russellt/2017/05/09/project-sauron-introduction/>`_ 
+* Russell Tomkins has written another blog on `Introducing Project Sauron – Centralised Storage of Windows Events – Domain Controller Edition <https://blogs.technet.microsoft.com/russellt/2017/05/09/project-sauron-introduction/>`_
 
- * Using the Project Sauron Framework, the deployment of centralised Windows Event Collector (WEC) server becomes almost simple. 
- * Using custom WEC subscriptions, the required events are forwarded into dedicated event channels and dedicated .evtx file. 
+ * Using the Project Sauron Framework, the deployment of centralised Windows Event Collector (WEC) server becomes almost simple.
+ * Using custom WEC subscriptions, the required events are forwarded into dedicated event channels and dedicated .evtx file.
  * Creation and deployment of your own custom solution or re-using one the pre-built solutions can have you operational in matter of hours not months.
 
 * Avecto has written `Centralizing Windows Events with Event Forwarding <http://www.aspirantinfotech.com/sg/download/avecto/brochure/EventCentralization.pdf>`_ provides guidance on how to centralize Privilege Guard events to a central server using Windows Event Forwarding.
@@ -243,7 +244,7 @@ Detecting Lateral Movement
 
 * Japan Computer Emergency Response Team's a practical guide on `Detecting Lateral Movement through Tracking Event Logs <https://www.jpcert.or.jp/english/pub/sr/ir_research.html>`_
 * NSA's document on `Spotting the Adversary with Windows Event Log Monitoring <https://cryptome.org/2014/01/nsa-windows-event.pdf>`_
-* CERT EU's document on `Detecting Lateral Movements in Windows Infrastructure <http://cert.europa.eu/static/WhitePapers/CERT-EU_SWP_17-002_Lateral_Movements.pdf>`_ 
+* CERT EU's document on `Detecting Lateral Movements in Windows Infrastructure <http://cert.europa.eu/static/WhitePapers/CERT-EU_SWP_17-002_Lateral_Movements.pdf>`_
 
 Internet Proxy Server
 ^^^^^^^^^^^^^^^^^^^^^
@@ -285,8 +286,8 @@ Operations Issues
 -----------------
 
 * Are all the network devices, operating systems security hardened according to CIS Benchmarks?
-* Do we maintain a inventory of Network Devices, Servers, Machines? What's their status? Online, Not reachable? 
-* Do we maintain a inventory of software installed in all of the machines? 
+* Do we maintain a inventory of Network Devices, Servers, Machines? What's their status? Online, Not reachable?
+* Do we maintain a inventory of software installed in all of the machines?
 
 Operations Additions
 --------------------
@@ -339,8 +340,8 @@ Allow only allowed applications to be run
 
 * `Software Restriction Policies <https://technet.microsoft.com/en-us/library/hh831534(v=ws.11).aspx>`_: Software Restriction Policies (SRP) is Group Policy-based feature that identifies software programs running on computers in a domain, and controls the ability of those programs to run
 * `Applocker <https://docs.microsoft.com/en-us/windows/device-security/applocker/applocker-overview>`_: AppLocker helps you control which apps and files users can run. These include executable files, scripts, Windows Installer files, dynamic-link libraries (DLLs), packaged apps, and packaged app installers.
-   
-* `Device Guard <https://docs.microsoft.com/en-us/windows/device-security/device-guard/introduction-to-device-guard-virtualization-based-security-and-code-integrity-policies>`_: Device Guard is a group of key features, designed to harden a computer system against malware. Its focus is preventing malicious code from running by ensuring only known good code can run. 
+
+* `Device Guard <https://docs.microsoft.com/en-us/windows/device-security/device-guard/introduction-to-device-guard-virtualization-based-security-and-code-integrity-policies>`_: Device Guard is a group of key features, designed to harden a computer system against malware. Its focus is preventing malicious code from running by ensuring only known good code can run.
 
 Detection Mechanism
 ^^^^^^^^^^^^^^^^^^^^
@@ -377,14 +378,14 @@ Threat Hunting
 
 Sharing Threat Intelligence
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
- 
+
 * `STIX <https://oasis-open.github.io/cti-documentation/stix/about.html>`_ : Structured Threat Information Expression (STIX) is a language and serialization format used to exchange cyber threat intelligence (CTI). STIX enables organizations to share CTI with one another in a consistent and machine readable manner, allowing security communities to better understand what computer-based attacks they are most likely to see and to anticipate and/or respond to those attacks faster and more effectively.
 
 * `TAXII <https://oasis-open.github.io/cti-documentation/>`_: Trusted Automated Exchange of Intelligence Information (TAXII) is an application layer protocol for the communication of cyber threat information in a simple and scalable manner. TAXII enables organizations to share CTI by defining an API that aligns with common sharing models. TAXII is specifically designed to support the exchange of CTI represented in STIX.
 
 * `Malware Information Sharing Platform (MISP) <http://www.misp-project.org/>`_: A platform for sharing, storing and correlating Indicators of Compromises of targeted attacks.
 
-Privileged Identity Management (PIM) 
+Privileged Identity Management (PIM)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 PIM is the monitoring and protection of superuser accounts in an organization's IT environments. Oversight is necessary so that the greater access abilities of super control accounts are not misused or abused.

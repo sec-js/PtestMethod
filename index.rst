@@ -55,11 +55,10 @@ The Infrastructure Pentest Series cover all the phases of Infrastructure Pentest
 
 
 #############################
-Remediation / Hardening Series
+Hardening Series
 #############################
 
-The Remediation / Hardening Series cover all the phases as described by
-`The Penetration Testing Execution Standard <http://www.pentest-standard.org/>`_.
+The Hardening Series cover all the procedures needed to be more secure.
 
 - :doc:`Securing Debian <LFFSecuringDebiang>` : Technical steps to harden Debian systems.
 
