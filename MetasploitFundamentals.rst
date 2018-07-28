@@ -1,6 +1,6 @@
 **************************
 Metasploit Fundamentals
-*********************
+**************************
 
 This is a fork from https://www.offensive-security.com/metasploit-unleashed/
 
@@ -163,7 +163,8 @@ msfconsole
 ==========
 
 ::
-  back          Move back from the current context
+
+ back          Move back from the current context
  banner        Display an awesome metasploit banner
  cd            Change the current working directory
  color         Toggle color
@@ -208,14 +209,17 @@ msfconsole
  use           Selects a module by name
  version       Show the framework and console library version numbers
 
+
 back
 ^^^^
 
 Once you have finished working with a particular module, or if you inadvertently select the wrong module, you can issue the back command to move out of the current context. This, however is not required. Just as you can in commercial routers, you can switch modules from within other modules. As a reminder, variables will only carry over if they are set globally.
 
 ::
-  msf auxiliary(ms09_001_write) > back
-  msf >
+
+ msf auxiliary(ms09_001_write) > back
+ msf >
+
 
 banner
 ^^^^^^
@@ -223,8 +227,9 @@ banner
 Simply displays a randomly selected banner
 
 ::
-  msf > banner
- _                                                    _
+
+ msf > banner
+  _                                                    _
  /     /         __                         _   __  /_/ __
  | |  / | _____               ___   _____ | | /   _
  | | /| | | ___ |- -|   /    / __ | -__/ | || | || | |- -|
@@ -238,6 +243,7 @@ Simply displays a randomly selected banner
  + -- --=[ 1467 exploits - 840 auxiliary - 232 post        ]
  + -- --=[ 432 payloads - 37 encoders - 8 nops             ]
 
+
 check
 ^^^^
 
@@ -245,7 +251,7 @@ There aren’t many exploits that support it, but there is also a check option t
 
 ::
 
-  msf exploit(ms08_067_netapi) > show options
+ msf exploit(ms08_067_netapi) > show options
 
  Module options (exploit/windows/smb/ms08_067_netapi):
 
@@ -274,7 +280,8 @@ color
 You can enable or disable if the output you get through the msfconsole will contain colors.
 
 ::
-  msf > color
+
+ msf > color
  Usage: color >'true'|'false'|'auto'>
 
  Enable or disable color output.

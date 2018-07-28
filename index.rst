@@ -75,7 +75,7 @@ Tools Documentation
 
 Here you will find the documentation of the main tools.
 
-- :doc:`Metasploit Fundamentams <MetasploitFundamentals>` : How to use Metasploit. Forked from metasploit unlished.
+- :doc:`Metasploit Fundamentals <MetasploitFundamentals>` : How to use Metasploit. Forked from metasploit unlished.
 
 
 
