@@ -359,8 +359,10 @@ exit
 The exit command will simply exit msfconsole.
 
 ::
+
  msf exploit(ms10_061_spoolss) > exit
  root@kali:~#
+
 
 grep
 ^^^^
@@ -541,7 +543,7 @@ kill
 
  ::
 
-   msf exploit(ms10_002_aurora) > kill 0
+ msf exploit(ms10_002_aurora) > kill 0
  Stopping job: 0...
 
  [*] Server stopped.
@@ -647,7 +649,8 @@ route
 The “route” command in Metasploit allows you to route sockets through a session or ‘comm’, providing basic pivoting capabilities. To add a route, you pass the target subnet and network mask followed by the session (comm) number.
 
 ::
-  meterpreter > route -h
+
+ meterpreter > route -h
  Route traffic destined to a given subnet through a supplied session.
 
  Usage:
@@ -1079,7 +1082,8 @@ exploits
 Naturally, show exploits will be the command you are most interested in running since at its core, Metasploit is all about exploitation. Run show exploits to get a listing of all exploits contained in the framework.
 
 ::
-  msf > show exploits
+
+ msf > show exploits
 
  Exploits
  ========
@@ -1099,7 +1103,7 @@ Running show payloads will display all of the different payloads for all platfor
 
 ::
 
-  msf > show payloads
+ msf > show payloads
 
  Payloads
  ========
@@ -1118,7 +1122,8 @@ As you can see, there are a lot of payloads available. Fortunately, when you are
 
 
 ::
-  msf  exploit(ms08_067_netapi) > show payloads
+
+ msf  exploit(ms08_067_netapi) > show payloads
 
  Compatible Payloads
  ===================

@@ -60,20 +60,21 @@ Hardening Series
 
   The Hardening Series cover all the procedures needed to be more secure.
 
-      - :doc:`Securing Debian <LFFSecuringDebiang>` : Technical steps to harden Debian systems.
+- :doc:`Securing Debian <LFFSecuringDebiang>` : Technical steps to harden Debian systems.
 
 
-      .. toctree::
-         :maxdepth: 2
-         :caption: Remediation
+.. toctree::
+   :maxdepth: 2
+   :caption: Remediation
 
-         LFFSecuringDebian
+   LFFSecuringDebian
+
 
 #############################
 Tools Documentation
 #############################
 
-Here you will find the documentation of the main tools.
+Here you will find the documentation of some tools.
 
 - :doc:`Metasploit Fundamentals <MetasploitFundamentals>` : How to use Metasploit. Forked from metasploit unlished.
 
