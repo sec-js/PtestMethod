@@ -1111,7 +1111,8 @@ Running show payloads will display all of the different payloads for all platfor
    aix/ppc/shell_interact                                            normal  AIX execve shell for inetd
  ...snip...
 
-### payloads
+payloads
+"""""
 
 As you can see, there are a lot of payloads available. Fortunately, when you are in the context of a particular exploit, running show payloads will only display the payloads that are compatible with that particular exploit. For instance, if it is a Windows exploit, you will not be shown the Linux payloads.
 
@@ -1130,7 +1131,8 @@ As you can see, there are a lot of payloads available. Fortunately, when you are
  ...snip...
 
 
-### options
+options
+"""""
 
 If you have selected a specific module, you can issue the show options command to display which settings are available and/or required for that specific module.
 
@@ -1153,7 +1155,8 @@ If you have selected a specific module, you can issue the show options command t
    0   Automatic Targeting
 
 
-### targets
+targets
+"""""
 
 If you aren’t certain whether an operating system is vulnerable to a particular exploit, run the show targets command from within the context of an exploit module to see which targets are supported.
 
@@ -1172,7 +1175,8 @@ If you aren’t certain whether an operating system is vulnerable to a particula
    12  Windows 2003 SP2 English (NX)
  ...snip...
 
-### advanced
+advanced
+"""""
 
 If you wish the further fine-tune an exploit, you can see more advanced options by running show advanced.
 
@@ -1192,7 +1196,8 @@ If you wish the further fine-tune an exploit, you can see more advanced options 
 
  ...snip...
 
-### encoders
+encoders
+"""""
 
 Running show encoders will display a listing of the encoders that are available within MSF.
 
@@ -1233,7 +1238,8 @@ Running show encoders will display a listing of the encoders that are available 
    x86/unicode_upper                        manual     Alpha2 Alphanumeric Unicode Uppercase Encoder
 
 
-### nops
+nops
+"""""
 
 Lastly, issuing the show nops command will display the NOP Generators that Metasploit has to offer.
 
@@ -1256,7 +1262,8 @@ Lastly, issuing the show nops command will display the NOP Generators that Metas
    x86/single_byte                   normal  Single Byte
 
 
-### use
+use
+"""""
 
 When you have decided on a particular module to make use of, issue the use command to select it. The use command changes your context to a specific module, exposing type-specific commands. Notice in the output below that any global variables that were previously set are already configured.
 
@@ -1285,7 +1292,7 @@ Selecting an exploit in Metasploit adds the ‘exploit’ and ‘check’ comman
 
 ::
 
-  msf > use  exploit/windows/smb/ms09_050_smb2_negotiate_func_index
+ msf > use  exploit/windows/smb/ms09_050_smb2_negotiate_func_index
  msf exploit(ms09_050_smb2_negotiate_func_index) > help
  ...snip...
  Exploit Commands
@@ -1310,11 +1317,12 @@ show
 
 Using an exploit also adds more options to the ‘show’ command.
 
-### MSF Exploit Targets
+MSF Exploit Targets
+"""""""
 
 ::
 
-  msf exploit(ms09_050_smb2_negotiate_func_index) > show targets
+ msf exploit(ms09_050_smb2_negotiate_func_index) > show targets
 
  Exploit targets:
 
@@ -1323,11 +1331,12 @@ Using an exploit also adds more options to the ‘show’ command.
    0   Windows Vista SP1/SP2 and Server 2008 (x86)
 
 
-### MSF Exploit Payloads
+MSF Exploit Payloads
+""""""
 
 ::
 
-  msf exploit(ms09_050_smb2_negotiate_func_index) > show payloads
+ msf exploit(ms09_050_smb2_negotiate_func_index) > show payloads
 
  Compatible Payloads
  ===================
@@ -1342,7 +1351,8 @@ Using an exploit also adds more options to the ‘show’ command.
    windows/adduser                                    normal  Windows Execute net user /ADD
  ...snip...
 
-### MSF Exploit Options
+MSF Exploit Options
+"""""""
 
 ::
 
@@ -1364,11 +1374,12 @@ Using an exploit also adds more options to the ‘show’ command.
    0   Windows Vista SP1/SP2 and Server 2008 (x86)
 
 
-### Advanced
+Advanced
+""""""""""
 
 ::
 
-  msf exploit(ms09_050_smb2_negotiate_func_index) > show advanced
+ msf exploit(ms09_050_smb2_negotiate_func_index) > show advanced
 
  Module advanced options (exploit/windows/smb/ms09_050_smb2_negotiate_func_index):
 
@@ -1383,11 +1394,12 @@ Using an exploit also adds more options to the ‘show’ command.
  ...snip...
 
 
-### Evasion
+Evasion
+"""""
 
 ::
 
-  msf exploit(ms09_050_smb2_negotiate_func_index) > show evasion
+ msf exploit(ms09_050_smb2_negotiate_func_index) > show evasion
  Module evasion options:
 
    Name                           Current Setting  Required  Description
