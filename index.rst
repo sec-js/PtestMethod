@@ -71,7 +71,7 @@ Hardening Series
 
 
 #############################
-Tools Documentation
+Metasploit Documentation
 #############################
 
 Here you will find the documentation of some tools.
