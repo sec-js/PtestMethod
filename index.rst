@@ -82,7 +82,7 @@ Here you will find the documentation of some tools.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Tools Docs
+   :caption: Metasploit Fundamentals
 
    MetasploitFundamentals
 

