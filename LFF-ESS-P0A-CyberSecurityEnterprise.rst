@@ -1,5 +1,5 @@
 ***********************************************
-The Essentials : Cybersecurity in an Enterprise
+Cybersecurity in an Enterprise
 ***********************************************
 
 This blog is about the Cybersecurity in an Enterprise. We would start with a simple concept of two people (Alice and Bob) starting a new company and building it to Micro (< 10 employees), Small (< 50 employees), Medium-sized (< 250 employees), larger company. We would walkthru scenarios where company is affected by security breaches, vulnerability assessments excercises. At each stage of the company, we would provide

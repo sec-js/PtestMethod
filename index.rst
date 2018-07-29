@@ -65,7 +65,7 @@ Hardening Series
 
 .. toctree::
    :maxdepth: 2
-   :caption: Remediation
+   :caption: Hardening
 
    LFFSecuringDebian
 
@@ -84,7 +84,7 @@ Here you will find the documentation of some tools.
    :maxdepth: 2
    :caption: Tools Docs
 
-    MetasploitFundamentals
+   MetasploitFundamentals
 
 
 

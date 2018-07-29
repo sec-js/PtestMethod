@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 *****************************
-The Essentials : Linux Basics
+Linux Basics
 *****************************
 
 This post lists essential commands and concepts which would be helpful to a Linux user. We would cover tools required for programming (Vi, git), system administration (Bash configuration files, Updating Debian Linux System, Adding/ Deleting/ Modifying Users/ Groups, Changing Group/ Owner/ Permission, Mounting/ Unmounting, Linux Directories, Runlevels and Kernel Configurations). Also, provide some useful tips, tricks and TODO which would help you learn and practice.
@@ -48,7 +48,7 @@ Two modes - Command and Insert Mode. All commands below are in command mode.
   x                           - Delete the character
   r                           - replace the character with the next key pressed.
   dw			      - Delete the current word.
-  dd                          - Delete the current line. 
+  dd                          - Delete the current line.
   d$                          - Delete the text from where your cursor is to the end of the line.
   dnd                         - Delete n lines.
   . 			      - Repeat the last command
@@ -66,12 +66,12 @@ Two modes - Command and Insert Mode. All commands below are in command mode.
   yy                          - Yank or copy current line.
   y$, yny                     - Similar to delete lines.
   p                           - Paste the line in the buffer in to text after the currentline.
-  :%!xxd                      - to turn it into a hexeditor. 
+  :%!xxd                      - to turn it into a hexeditor.
   :%!xxd -r                   - to go back to normal mode (from hexedit mode)
 
 Vi Configuration Files
 ----------------------
-    
+
 Two configurations files which are important:
 
 .vimrc
@@ -79,7 +79,7 @@ Two configurations files which are important:
 Contains optional runtime configuration settings to initialize Vim when it starts. Example: If you want Vim to have syntax on and line numbers on, whenever you open vi, enter syntax on and set number in this file.
 
 ::
-  
+
  ##Sample contents of .vimrc
 
  syntax on
@@ -96,7 +96,7 @@ Viminfo file stores command-line, search string, input-line history and other st
 Replace text in Vi
 ------------------
 
-:: 
+::
 
   :s/test/learn     - would replace test to learn in current line but only first instance.
   :s/test/learn/g   - would replace test to learn in current line all the instance.
@@ -113,7 +113,7 @@ Other Info
  * Youcompleteme : Code-completion engine for Vim
 
 
-Bash configuration files - For Debian/Ubuntu based Systems 
+Bash configuration files - For Debian/Ubuntu based Systems
 ==========================================================
 
 Important Files
@@ -160,7 +160,7 @@ Using apt-get
 Using Debian Package Manager dpkg
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:: 
+::
 
   dpkg -i <Package>.deb          - Install package.
   dpkg -r <Package>              - Removes everything except configuration files.
@@ -181,19 +181,19 @@ Adding/Deleting/Modifying Users/Groups
    --disabled-login  : Do not run passwd to set the password.
   deluser <username> : Delete a user.
    --remove-home     : Remove the home directory of the user and its mailspool.
-   --remove-all-files: Remove all files from the system owned by this user. 
+   --remove-all-files: Remove all files from the system owned by this user.
    --backup          : Backup all files contained in the userhome and the mailspool-file to a file named /$user.tar.bz2 or /$user.tar.gz.
   usermod            : Modify a user account.
    -e EXPIREDATE     : The date on which the user account will be disabled. The date is specified in the format YYYY-MM-DD.
    -L, --lock        : Lock a user's password.
-   -U, --unlock      : Unlock a user's password  
+   -U, --unlock      : Unlock a user's password
   groupadd           : Create a new group.
   groupdel           : Delete a group.
   groupmod           : Modify a group definition on the system.
 
 Changing Group/Owner/Permission
 -------------------------------
-    
+
 ::
 
   chown              : Change file owner and group.
@@ -217,7 +217,7 @@ Mounting/ Unmounting
 Mounting Windows share on Linux
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:: 
+::
 
   mount -t cifs -o username=<share user>,password=<share password>,domain=example.com //WIN_PC_IP/<share name> /mnt
 
@@ -235,7 +235,7 @@ Linux Directories
   /usr/share/doc, /usr/share/man    : complete system documentation.
   /dev                              : system device files. In Unix, hardware devices are represented as files.
   /proc                             : "virtual" directory containing files through which you can query or tune Linux kernel settings.
-      
+
 
 Runlevels and Kernel Configurations
 -----------------------------------
@@ -243,25 +243,25 @@ Runlevels and Kernel Configurations
 Linux Boot Process
 ^^^^^^^^^^^^^^^^^^
 
-:: 
-      
-  1. BIOS start the boot loader. 
+::
+
+  1. BIOS start the boot loader.
   2. Boot loader loads the kernel into memory.
-  3. The Kernel mounts disks/partitions and starts the init daemon. 
+  3. The Kernel mounts disks/partitions and starts the init daemon.
   4. The init daemon starts services based on the runlevel.
-          
+
 Linux has six runlevels 0-6. Scripts are contained in /etc/rc[0-6,S].d/. Each folder contains the scripts which are followed by either K or S. If the first letter is K that script is not executed. If S, that script is executed. /etc/inittab contains the default run level.
 
 ====   ========================================================   =============================================================================
 ID     Name                                                       Description
 ====   ========================================================   =============================================================================
-0      Halt                                                       Shuts down the system.                                                      
-1      Single-user Mode                                           Mode for administrative tasks.                     
-2      Multi-user Mode                                            Does not configure network interfaces and does not export networks services      
-3      Multi-user Mode with Networking                            Starts the system normally.                       
-4      Not used/User-definable                                    For special purposes.                        
-5      Start system normally with display manager (with GUI).     Same as runlevel 3 + display manager               
-6      Reboot                                                     Reboot the system                              
+0      Halt                                                       Shuts down the system.
+1      Single-user Mode                                           Mode for administrative tasks.
+2      Multi-user Mode                                            Does not configure network interfaces and does not export networks services
+3      Multi-user Mode with Networking                            Starts the system normally.
+4      Not used/User-definable                                    For special purposes.
+5      Start system normally with display manager (with GUI).     Same as runlevel 3 + display manager
+6      Reboot                                                     Reboot the system
 ====   ========================================================   =============================================================================
 
 Sysctl - configure kernel parameters
@@ -280,8 +280,8 @@ Kernel Modules
 
 Kernel modules are contained in /lib/modules/$(uname -r)/
 
-:: 
- 
+::
+
   lsmod      : list all loaded modules
   modprobe   : load kernel modules
   lspci      : list all pci devices
@@ -291,23 +291,23 @@ Kernel modules are contained in /lib/modules/$(uname -r)/
 Manage Runlevels
 ^^^^^^^^^^^^^^^^
 
-Debian GNU provides a convenient tool to manage runlevels (to control when services are started and shut down); 
-   
+Debian GNU provides a convenient tool to manage runlevels (to control when services are started and shut down);
+
 * update-rc.d and there are two commonly used invocation methods:
 
- :: 
+ ::
 
    update-rc.d -f <service name> remove : Disabling a service.
    update-rc.d <service name> defaults  : Insert links using defaults, start in runlevel 2-5 and stop in runlevels 0,1 and 6.
- 
+
 * Systemctl : Control the systemd system and service manager. systemctl may be used to introspect and control the state of the "systemd" system and service manager.
 
- :: 
+ ::
 
    systemctl : Present a detailed output about the different services running.
 
-   e.g. 
-   
+   e.g.
+
    systemctl status <service_name> - Status of the service.
    systemctl start <service_name>  - Start the service
 
@@ -331,7 +331,7 @@ tmux
 
 ::
 
- (Prefix Key) + 
+ (Prefix Key) +
  c  create window
  w  list windows
  n  next window
@@ -367,7 +367,7 @@ This should apply your changes to the running tmux server without affecting the 
 
 **Copy Paste**
 
-For copying, Press the Shift key; i.e., Shift-MouseHighlight properly selects text and - still holding down the shift key 
+For copying, Press the Shift key; i.e., Shift-MouseHighlight properly selects text and - still holding down the shift key
 
 * we can right-click and get the standard bash context menu with Copy, Paste, etc.
 * or Ctrl-Shift-C and Ctrl-Shift-V does work to copy and paste text.
@@ -379,18 +379,18 @@ GIT
 ---
 
 Version Control System, really useful for tracking your changes.
- 
-.. Todo :: 
+
+.. Todo ::
       `try.github.com <https://try.github.com>`_ 15 mins tutorial.
 
 cc - GNU Compile Collection
 ---------------------------
 
-:: 
+::
 
   To Compile: gcc -Wall -pedantic -g <C source file> -o <Executable file>
   -Wall -pedantic : to check for all the warnings and errors if any.
-  -g              : to create the symbol file to be used by gdb 
+  -g              : to create the symbol file to be used by gdb
   -o              : to create the executable file.
 
 
@@ -414,12 +414,12 @@ From Files
 ----------
 
 ::
-        
-  /etc/issue     : Contains the message which is displayed on terminal before login. 
+
+  /etc/issue     : Contains the message which is displayed on terminal before login.
   /etc/motd      : Contains the message which is displayed on terminal after login.
   /proc/cpuinfo  : provides information about CPU.
   /proc/meminfo  : provides information about memory/ RAM.
-  /proc/version  : provides information about the version of your system. 
+  /proc/version  : provides information about the version of your system.
 
 From Commands
 -------------
@@ -427,7 +427,7 @@ From Commands
 ::
 
   last      : shows all the login attempts and the reboot occurred.
-  lastb     : shows all the bad login attempts. 
+  lastb     : shows all the bad login attempts.
   lastlog   : shows the list of all the users and when did they login.
   id        : print real and effective user and group IDs.
   whoami    : whoami - print effective userid.
@@ -445,9 +445,9 @@ Grep - Global Regular Expression Print
 
 Two ways to provide input to Grep:
 
-* search a given file or files on a system (including a recursive search through sub-folders). 
+* search a given file or files on a system (including a recursive search through sub-folders).
 
- :: 
+ ::
 
   grep bitvijays /etc/passwd
 
@@ -488,11 +488,11 @@ Using regular expressions
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ::
- 
+
  grep 'v.r' testfile
  thank you very much
 
-In the search above, . is used to match any single character - matches “ver” in “very”. 
+In the search above, . is used to match any single character - matches “ver” in “very”.
 
 A regular expression may be followed by one of several repetition operators:
 
@@ -506,16 +506,16 @@ Search a specific string
 ^^^^^^^^^^^^^^^^^^^^^^^^
 Scan files for a text present in them Find a way to scan my entire linux system for all files containing a specific string of text. Just to clarify, I'm looking for text within the file, not in the file name.
 
-:: 
-        
+::
+
   grep -rnw 'directory' -e "pattern" --include={*.c,*.h} --exclude=*.o
 
     -r                    : search recursively
     -n                    : print line number
-    -w                    : match the whole word. 
+    -w                    : match the whole word.
     --include={*.c,*.h}   : Only search through the files which have .c or .h extensions.
     --exclude=*.o         : Exclude searching in files with .o extensions.
- 
+
 .. Note :: --exclude or --include parameter could be used for efficient searching.
 
 Line and word anchors
@@ -531,14 +531,14 @@ Line and word anchors
 * The $ anchor specifies that the pattern before it should be at the end of the line.
 
  ::
-  
+
   grep 'i$' testfile
   Hi
 
 * The operator \< anchors the pattern to the start of a word.
 
  ::
- 
+
   grep '\<fe' testfile
   carry out few cyber-crime investigations
 
@@ -552,14 +552,14 @@ Line and word anchors
 * The \b (word boundary) anchor can be used in place of \< and \> to signify the beginning or end of a word:
 
  ::
-  
+
   grep -e '\binve' testfile
   carry out few cyber-crime investigations
 
 Shell expansions - input to Grep
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If we don’t single-quote the pattern passed to Grep, the shell could perform shell expansion on the pattern and actually feed a changed pattern to Grep. 
+If we don’t single-quote the pattern passed to Grep, the shell could perform shell expansion on the pattern and actually feed a changed pattern to Grep.
 
 ::
 
@@ -575,7 +575,7 @@ We used double quotes to make the Bash shell replace the environment variable $H
 
 Here, back-tick expansion is done by the shell, replacing `whoami` with the user name (root) that is returned by the whoami command.
 
-    
+
 Copy - Copy files and directories
 ---------------------------------
 
@@ -590,7 +590,7 @@ Copy - Copy files and directories
 cut - remove sections from each line of files
 ---------------------------------------------
 
-::  
+::
 
  cut OPTION... [FILE]...
   -d        : use DELIM instead of TAB for field delimiter.
@@ -607,7 +607,7 @@ Pipes
 
 tar - Archiving utility
 -----------------------
-    
+
 ::
 
  tar
@@ -622,7 +622,7 @@ find - Searching files
 
 ::
 
-  find / -name somename 
+  find / -name somename
 
   -user       : File is owned by user uname (numeric user ID allowed).
   -group      : File belongs to group gname (numeric group ID allowed).
@@ -646,7 +646,7 @@ Find each file in the current directory and tell it's type and grep JPEG files.
 Other commands
 --------------
 
-:: 
+::
 
   nm-applet : a applet for network manager.
   wc        : print newline, word, and byte counts for each file.
@@ -689,13 +689,13 @@ Special Characters
 
 
 
-Bash 
+Bash
 ====
 
 Equality Tests
 --------------
 
-:: 
+::
 
   test      : checks file types and compare values
     -d      : check if the file is a directory
@@ -709,15 +709,15 @@ Equality Tests
     -x      : check if the file is executable
 
 Example
-  
-:: 
+
+::
 
   if test -f /etc/foo.txt
-  then 
+  then
 
-It can also be written as 
+It can also be written as
 
-::  
+::
 
   if [ -f /etc/foo.txt ]; then
 
@@ -731,7 +731,7 @@ Checks equality between numbers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ::
-    
+
   x -eq y         : Check is x is equals to y
   x -ne y         : Check if x is not equals to y
   x -gt y         : Check if x is greater than y
@@ -752,14 +752,14 @@ Bash Command Substitution
 -------------------------
 
 Command substitution allows the output of a command to replace the command itself. Command substitution occurs when a command is enclosed as follows:
-  
-.. code-block :: bash 
+
+.. code-block :: bash
 
   $(command)
 
-or 
+or
 
-.. code-block :: bash 
+.. code-block :: bash
 
   `command`
 
@@ -830,7 +830,7 @@ Bash Programming
 Bash For Loop
 ^^^^^^^^^^^^^
 
-.. code-block :: bash 
+.. code-block :: bash
 
   for i in $( ls ); do
       echo item: $i
@@ -839,7 +839,7 @@ Bash For Loop
 Bash If Statement
 ^^^^^^^^^^^^^^^^^
 
-.. code-block :: bash 
+.. code-block :: bash
 
   if [ "foo" = "foo" ]; then
          echo expression evaluated as true
@@ -850,7 +850,7 @@ Bash If Statement
 Bash loop thru array of strings
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block :: bash 
+.. code-block :: bash
 
   ## declare an array variable
   declare -a arr=("element1" "element2" "element3")
@@ -864,13 +864,13 @@ Bash loop thru array of strings
 
 The value of the variable whose name is in this variable can be found by
 
-.. code-block :: bash 
+.. code-block :: bash
 
   echo ${!n}
 
 For example:
 
-.. code-block :: bash 
+.. code-block :: bash
 
   eth0="$(ip -o -4 address | grep eth0 | awk '{print $4}')"
   wlan0="$(ip -o -4 address | grep wlan0 | awk '{print $4}')"
@@ -884,13 +884,13 @@ For example:
 
 Sample Output with ${!interfaces}:
 
-.. code-block :: bash 
+.. code-block :: bash
 
   10.233.113.136/23
 
 Sample Output with ${interfaces}:
 
-.. code-block :: bash 
+.. code-block :: bash
 
     eth0
     wlan0
@@ -904,7 +904,7 @@ Information
 Confidentiality, Integrity, Availability
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-We want our information to 
+We want our information to
 
 * be read by only the right people (confidentiality).
 * only be changed by authorized people or processes (integrity)
@@ -922,7 +922,7 @@ su
 
 Change users or become superuser. The difference between "su -" and "su" is that former "su -" would switch to the new user directory. It would also change the environment variable according to the changed user. Whereas "su" would only change the user but will stay in the same directory.
 
-Example: "su -" 
+Example: "su -"
 
 ::
 
@@ -943,7 +943,7 @@ su -c
 
 Executing command as another user
 
-:: 
+::
 
   su -c "command" : Specify a command that will be invoked by the shell using its -c.
 
@@ -976,17 +976,17 @@ The **/etc/passwd** file is a colon-separated file that contains the following i
 * Login shell
 
 ::
- 
+
   root:!:0:0::/:/usr/bin/ksh
   daemon:!:1:1::/etc:
   bin:!:2:2::/bin:
-  sys:!:3:3::/usr/sys: 
+  sys:!:3:3::/usr/sys:
   adm:!:4:4::/var/adm:
-  uucp:!:5:5::/usr/lib/uucp: 
+  uucp:!:5:5::/usr/lib/uucp:
   guest:!:100:100::/home/guest:
   nobody:!:4294967294:4294967294::/:
   lpd:!:9:4294967294::/:
-  lp:*:11:11::/var/spool/lp:/bin/false 
+  lp:*:11:11::/var/spool/lp:/bin/false
   invscout:*:200:1::/var/adm/invscout:/usr/bin/ksh
   nuucp:*:6:5:uucp login user:/var/spool/uucppublic:/usr/sbin/uucp/uucico
   paul:!:201:1::/home/paul:/usr/bin/ksh
@@ -997,7 +997,7 @@ The **/etc/passwd** file is a colon-separated file that contains the following i
 
 The **/etc/shadow** file contains password and account expiration information for users, and looks like this:
 
-:: 
+::
 
   smithj:Ep6mckrOLChF.:10063:0:99999:7:xx:
 
@@ -1018,15 +1018,15 @@ As with the passwd file, each field in the shadow file is also separated with ":
 
 The **/etc/group** file stores group information or defines the user groups. There is one entry per line, and each line has the following format (all fields are separated by a colon (:)
 
-:: 
+::
 
   cdrom:x:24:john,mike,yummy
 
 Where,
 
 * group_name: Name of group.
-* Password: Generally password is not used, hence it is empty/blank. It can store encrypted password. This is useful to implement privileged groups. 
-* Group ID (GID): Each user must be assigned a group ID. You can see this number in your /etc/passwd file. 
+* Password: Generally password is not used, hence it is empty/blank. It can store encrypted password. This is useful to implement privileged groups.
+* Group ID (GID): Each user must be assigned a group ID. You can see this number in your /etc/passwd file.
 * Group List: It is a list of user names of users who are members of the group. The user names, must be separated by commas.
 
 Tips and tricks
@@ -1045,21 +1045,21 @@ In this case, look for /var/log/apt/history.log, look for the time around which 
 
 To reinstall these packages you just need the package name such as
 
-:: 
+::
 
   libapt-inst1.5, apt-utils.
 
   *Step1* : Use sed to search for pattern "), " and replace it with "), \n". This would separate the packages by new line. Within vi ":%s/), /\n/g"
   *Step2* : Use cut -d ":" -f 1 to remove :amd64 and anything after that.
-  *Step3* : Now we have to get them back in one line rather than multiple lines. Within vi ":%s/\n/ /g" 
-  
+  *Step3* : Now we have to get them back in one line rather than multiple lines. Within vi ":%s/\n/ /g"
+
 Track /etc directory
 --------------------
-    
+
 Etckeeper may be a bit more advanced, and it is used to put your whole /etc directory under revision control. To install and initialize it,
 
-:: 
-  
+::
+
   apt-get install etckeeper
   etckeeper init
   cd /etc
@@ -1067,8 +1067,8 @@ Etckeeper may be a bit more advanced, and it is used to put your whole /etc dire
 
 After that, you can see pending changes in /etc by cd-ing into it and running
 
-:: 
-  
+::
+
   git status or git diff
 
 at any time, and you can see previous, committed changes by running
@@ -1079,14 +1079,14 @@ at any time, and you can see previous, committed changes by running
 
 You can override pending changes to any file with the last committed version with
 
-:: 
+::
 
   git checkout FILENAME
-  
+
 ls showing full path
 --------------------
 
-:: 
+::
 
   ls -R /path | awk '/:$/&&f{s=$0;f=0} /:$/&&!f{sub(/:$/,"");s=$0;f=1;next} NF&&f{ print s"/"$0 }'
 
@@ -1096,7 +1096,7 @@ Keyboard shortcuts
 Moving
 ^^^^^^
 
-:: 
+::
 
   Ctrl + a : Move to the start of line.
   Ctrl + e : Move to the end of line.
@@ -1120,12 +1120,12 @@ Window
 
  WinKey + H : Minimize/ Hide the Window
  WinKey + Up Arrow Key : Maximize the current windows
- WinKey + Down Arrow Key : Return to original 
+ WinKey + Down Arrow Key : Return to original
 
 Searching History
 -----------------
 
-:: 
+::
 
   Search as you type. Ctrl + r and type the search term;
 
@@ -1134,7 +1134,7 @@ Read `Command Line Editing <http://www.gnu.org/software/bash/manual/bashref.html
 Awk converting to normal output to csv
 --------------------------------------
 
-:: 
+::
 
   A B --> "A","B"
   awk '{print "\"" $1 "\",\"" $2"\""}'
