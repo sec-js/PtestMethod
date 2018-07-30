@@ -4923,9 +4923,9 @@ You should now have an understanding of how to manually import Nessus scan resul
 
 
 
-***************
+*******
 Fuzzers
-*************
+*******
 
 
 
@@ -5158,9 +5158,9 @@ MSF tells us that the IMAP server has probably crashed and could check it using 
 
 
 
-**********************
+*******************
 Exploit Development
-***********************
+*******************
 
 
 Next, we are going to cover one of the most well-known and popular aspects of the Metasploit Framework, exploit development. In this section, we are going to show how using the Framework for exploit development allows you to concentrate on what is unique about the exploit, and makes other matters such as payload, encoding, NOP generation, and so on just a matter of infrastructure.
@@ -6684,9 +6684,9 @@ Success! Not all exploits are this easy to port over but the time spent is well 
 https://github.com/rapid7/metasploit-framework/blob/master/CONTRIBUTING.md
 
 
-******************
+********************
 Client Sides attacks
-*******************
+********************
 
 Client side attacks are always a fun topic and a major front for attackers today. As network administrators and software developers fortify the perimeter, pentesters need to find a way to make the victims open the door for them to get into the network. Client side attacks require user-interaction such as enticing them to click a link, open a document, or somehow get to your malicious website.
 
@@ -7202,9 +7202,9 @@ Now we can test out the document by opening it up and check back to where we hav
 Success! We have a Meterpreter shell right to the system that opened the document, and best of all, it doesn’t get picked up by anti-virus!!!
 
 
-***********************
+*********************
 MSF Post Exploitation
-***********************
+*********************
 
 After working so hard to successfully exploit a system, what do we do next?
 
@@ -10078,7 +10078,7 @@ Write Data to File
 
 ******************
 Maintaining Access
-*******************
+******************
 
 
 Pivoting to Maintain Access
@@ -10480,7 +10480,7 @@ When a user logs in to the remote system, a Meterpreter session is opened up for
 
 ******************
 MSF Extended Usage
-*******************
+******************
 
 
 
@@ -12371,7 +12371,7 @@ We now have a functioning php meterpreter shell on the target.
 
 *********************
 Post Module Reference
-**********************
+*********************
 
 
 Windows
@@ -13482,9 +13482,9 @@ This module uploads a file to virustotal.com, and displays the scan results. It 
 
 
 
-*******************
+****************
 Auxiliary Module
-******************
+****************
 
 
 Admin
