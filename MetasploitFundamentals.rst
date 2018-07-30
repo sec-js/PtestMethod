@@ -4921,9 +4921,13 @@ With the report imported, we can list the hosts and vulnerabilities just as we c
 
 You should now have an understanding of how to manually import Nessus scan results as well as use the Nessus Bridge plugin directly within the Metasploit Framework to scan for vulnerabilities.
 
+
+
 ***************
-fuzzers
+Fuzzers
 *************
+
+
 
 Writing a Simple Fuzzer
 ========================
@@ -10075,6 +10079,7 @@ Write Data to File
 ******************
 Maintaining Access
 *******************
+
 
 Pivoting to Maintain Access
 ===========================
