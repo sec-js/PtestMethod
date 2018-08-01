@@ -98,6 +98,7 @@ Other Tools
    :caption: Other Usefull Tools Doc
 
    pupy
+   cme
 
 #####################
 Obligatory Disclaimer
