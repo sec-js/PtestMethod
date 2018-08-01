@@ -95,7 +95,7 @@ Other Tools
 
 .. toctree::
    :maxdepth: 2
-   :caption: Other Usefull Tools Doc
+   :caption: Other Tools
 
    pupy
    cme
