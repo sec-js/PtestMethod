@@ -2,9 +2,9 @@
 Intelligence Gathering
 ***************************************************************
 
-This post (always Work in Progress) lists technical steps which one can follow while gathering information about an organization. 
+This post (always Work in Progress) lists technical steps which one can follow while gathering information about an organization.
 
-Suppose, we are tasked with an external/ internal penetration test of a big organization with DMZ, Data centers, Telecom network etc. Moreover, the only information that we know at this moment is the company name and/or it’s domain name such as example.com 
+Suppose, we are tasked with an external/ internal penetration test of a big organization with DMZ, Data centers, Telecom network etc. Moreover, the only information that we know at this moment is the company name and/or it’s domain name such as example.com
 
 
 
@@ -22,13 +22,13 @@ What are the
 Additionally it is also interesting to know if there have been any security breaches
 in the past.
 
-We might be able to compromise user credential(s) or running vulnerable service(s) and get 
+We might be able to compromise user credential(s) or running vulnerable service(s) and get
 inside the internal network of the organization.
 
 Fingerprinting
 ==============
 
-We can either do **Passive fingerprinting** (learning more about the company, without them knowing it) or **Active fingerprinting** (process of transmitting packets to a remote host and analysing corresponding replies (which very likely will be logged)). 
+We can either do **Passive fingerprinting** (learning more about the company, without them knowing it) or **Active fingerprinting** (process of transmitting packets to a remote host and analysing corresponding replies (which very likely will be logged)).
 
 **Passive fingerprinting** and **Active fingerprinting** can be done by using various methods such as:
 
@@ -46,7 +46,7 @@ We can either do **Passive fingerprinting** (learning more about the company, wi
 | - Reverse DNS Lookup using External Websites   |                                      |
 +------------------------------------------------+--------------------------------------+
 
-Do you remember from earlier? We need to find answers to 
+Do you remember from earlier? We need to find answers to
 
 +---------------------------------------------------------------+-------------------------------------------------------+
 |     Questions (What are the)                                  | Answer                                                |
@@ -71,7 +71,7 @@ Passive Fingerprinting:
 
 Whois
 -----
-Whois provides information about the registered users or assignees of an Internet resource, such as a Domain name, an IP address block, or an autonomous system. 
+Whois provides information about the registered users or assignees of an Internet resource, such as a Domain name, an IP address block, or an autonomous system.
 
 whois acts differently when given an IP address then a domain name.
 
@@ -80,38 +80,38 @@ whois acts differently when given an IP address then a domain name.
 
 ::
 
-  whois <Domain Name/ IP Address>  
-  -H Do not display the legal disclaimers some registries like to show you.                                
-      
+  whois <Domain Name/ IP Address>
+  -H Do not display the legal disclaimers some registries like to show you.
+
 Googling for
 
-:: 
+::
 
   "Registrant Organization" inurl: domaintools
 
-Also helps for to search for new domains registered by the same organization. "Registrant Organization" is present in the output of whois. 
-This technique was used by person who compromised FinFisher in his `writeup <http://pastebin.com/raw/cRYvK4jb>`__.
+Also helps for to search for new domains registered by the same organization. "Registrant Organization" is present in the output of whois.
 
-.. Todo :: Add example so people don't have to (re)read or skim through the pastebin article  
 
 ASN Number
 ----------
 
 We could find the AS Number that participates in the Border Gateway Protocol (BGP) used by particular organization which could further inform about the IP address ranges used by the organization. An ASN Number could be found by using Team CMRU whois service
 
-:: 
-    
+::
+
   whois -h whois.cymru.com " -v 216.90.108.31"                         |
-      
+
 If you want to do bulk queries refer @ `IP-ASN-Mapping-Team-CYMRU <http://www.team-cymru.org/IP-ASN-mapping.html>`_
 
 Hurricane Electric Internet Services also provide a website `BGPToolkit <http://bgp.he.net>`__ which provides your IP Address ASN or search function by Name, IP address etc. It also provides AS Peers which might help in gathering more information about the company in terms of its neighbors.
 
-.. Todo ::  Commandline checking of subnet and making whois query efficient.
 
-Recon-ng <https://bitbucket.org/LaNMaSteR53/recon-ng/wiki/Usage%20Guide>
+Recon-ng
 ^^^^^^^^
 
+Available at : https://bitbucket.org/LaNMaSteR53/recon-ng/wiki/Usage%20Guide
+
+Those are some of the functionalities :
 
 * use recon/domains-hosts/bing\_domain\_web : Harvests hosts from Bing.com by using the site search operator.
 * use recon/domains-hosts/google\_site\_web : Harvests hosts from google.com by using the site search operator.
@@ -120,30 +120,34 @@ Recon-ng <https://bitbucket.org/LaNMaSteR53/recon-ng/wiki/Usage%20Guide>
 * use reporting/csv : Creates a CSV file containing the specified harvested data.
 
 
-The Harvester <https://github.com/laramies/theHarvester>
+The Harvester
 ^^^^^^^^^^^^^
+
+Available at : https://github.com/laramies/theHarvester
 
 The harvester provides email addresses, virtual hosts, different domains, shodan results etc. for the domain. It provides really good results, especially if you combine with shodan results as it may provide server versions and what's OS is running on a provided IP address.
 
-:: 
+::
 
-  Usage: theharvester options      
-     -d: Domain to search or company name                          
-     -b: data source: google, googleCSE, bing, bingapi, pgp        
+  Usage: theharvester options
+     -d: Domain to search or company name
+     -b: data source: google, googleCSE, bing, bingapi, pgp
                       linkedin, google-profiles, people123, jigsaw,
                       twitter, googleplus, all
      -v: Verify host name via dns resolution and search for virtual hosts                              |
-     -f: Save the results into an HTML and XML file 
-     -c: Perform a DNS brute force for the domain name             
+     -f: Save the results into an HTML and XML file
+     -c: Perform a DNS brute force for the domain name
      -t: Perform a DNS TLD expansion discovery
-     -e: Use this DNS server   
+     -e: Use this DNS server
      -h: use SHODAN database to query discovered hosts             |
-         
 
 
 
-Spiderfoot <http://www.spiderfoot.net/download/>
+
+Spiderfoot
 ^^^^^^^^^^^^^
+
+Available at : http://www.spiderfoot.net/download/
 
 SpiderFoot is a reconnaissance tool that automatically queries over 100 public data sources (OSINT) to gather intelligence on IP addresses, domain names, e-mail addresses, names and more. You simply specify the target you want to investigate, pick which modules to enable and then SpiderFoot will collect data to build up an understanding of all the entities and how they relate to each other.
 
@@ -159,18 +163,20 @@ DNS Dumpster API
 
 We can utilize DNS Dumpster's API to know the various sub-domain related to a domain.
 
-:: 
-       
-  curl -s http://api.hackertarget.com/hostsearch/?q=example.com > hostsearch    
+::
+
+  curl -s http://api.hackertarget.com/hostsearch/?q=example.com > hostsearch
 
 and the various dns queries by
 
-:: 
+::
 
-  curl -s http://api.hackertarget.com/dnslookup/?q=example.com > dnslookup      
-  
-  
-  .. Todo :: Combine these results with recon-ng, spiderfoot and DNS Dumpsters and create one csv with all results.
+  curl -s http://api.hackertarget.com/dnslookup/?q=example.com > dnslookup
+
+
+
+
+.. Tip :: Combine these results with recon-ng, spiderfoot and DNS Dumpsters and create one csv with all results. Then use  Eyewitness or HTTPScreenshot to check what's runnning.
 
 Google Dorks (search operators)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -182,11 +188,15 @@ Google Dorks (search operators)
 
 Three good places to refer are `Search Operators <https://support.google.com/websearch/answer/2466433>`__, `Advanced Operators <https://sites.google.com/site/gwebsearcheducation/advanced-operators>`__ and `Google Hacking Database <https://www.exploit-db.com/google-hacking-database/>`__.
 
+
+.. Tip :: Don't underestimate the findings from those requests.
+
+
 Other Tools
 ^^^^^^^^^^^
 
 * `SearchDiggityv3 <http://www.bishopfox.com/resources/tools/google-hacking-diggity/attack-tools/>`__ is Bishop Fox’s MS Windows GUI application that serves as a front-end to the most recent versions of our Diggity tools: GoogleDiggity, BingDiggity, Bing, LinkFromDomainDiggity, CodeSearchDiggity, DLPDiggity, FlashDiggity, MalwareDiggity, PortScanDiggity, SHODANDiggity, BingBinaryMalwareSearch, and NotInMyBackYard Diggity.
-
+* `DirBuster <https://sourceforge.net/projects/dirbuster/>`__ ttempt to find hidden pages/directories and directories with a web application, thus giving a another attack vector (For example. Finding an unlinked to administration page).
 
 Publicly available scans of IP Addresses
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -194,9 +204,9 @@ Publicly available scans of IP Addresses
 * `Exfiltrated <https://exfiltrated.com/>`__ provides the scans from the 2012 Internet Census. It would provide the IP address and the port number running at the time of scan in the year 2012.
 * `Shodan <https://www.shodan.io/>`__: provides the same results may be with recent scans. You need to be logged-in. Shodan CLI is available at `Shodan Command-Line Interface <https://cli.shodan.io/>`__
 
-Shodan Queries 
+Shodan Queries
 
-:: 
+::
 
   title   : Search the content scraped from the HTML tag
   html    : Search the full HTML content of the returned page
@@ -208,16 +218,17 @@ Shodan Queries
   country : Search for results in a given country (2-letter code)
   city    : Search for results in a given city
 
+.. Tip :: you can add other terms in your query like webcam, printer, rdp, windows, default password, ...
 
 * `Censys <https://censys.io/>`_ is a search engine that allows computer scientists to ask questions about the devices and networks that compose the Internet. Driven by Internet-wide scanning, Censys lets researchers find specific hosts and create aggregate reports on how devices, websites, and certificates are configured and deployed. A good feature is the Query metadata which tells the number of Http, https and other protocols found in the IP network range.
 
  Censys.io queries
-   
- :: 
+
+ ::
 
   ip:192.168.0.0/24 -- CIDR notation
 
-           
+
 Reverse DNS Lookup using External Websites
 ------------------------------------------
 
@@ -244,16 +255,16 @@ Robtex
 `Robtex <https://www.robtex.com/>`__ : Robtex is one of the world's largest network tools. At robtex.com, you will find everything you need to know about domains, DNS, IP, Routes, Autonomous Systems, etc. There's a nmap nse `http-robtex-reverse-ip <https://nmap.org/nsedoc/scripts/http-robtex-reverse-ip.html>`__ which can be used to find the domain/ website hosted on that ip.
 
 ::
- 
+
   nmap --script http-robtex-reverse-ip --script-args http-robtex-reverse-ip.host='XX.XX.78.214'
   Starting Nmap 7.01 ( https://nmap.org ) at 2016-04-20 21:39 IST
   Pre-scan script results:
-  | http-robtex-reverse-ip: 
+  | http-robtex-reverse-ip:
   |   xxxxxxindian.com
   |_  www.xxxxxindian.com
 
-.. _active_fingerprinting:       
-  
+.. _active_fingerprinting:
+
 Active Fingerprinting
 =====================
 
@@ -265,7 +276,7 @@ Exploring the Network Further
 ------------------------------
 
 By now, we would have information about what ports are open and possibly what services are running on them. Further, we need to explore the various options by which we can get more information.
-       
+
 Gathering Screenshots for http* services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -280,15 +291,15 @@ There are four ways (in my knowledge to do this):
 * Another method is to use `html2image <https://code.google.com/p/java-html2image/>`__ which is a simple Java library which converts plain HTML markup to an image and provides client-side image-maps using html element.
 
 * **RAWR: Rapid Assessment of Web Resources**: `RAWR <https://bitbucket.org/al14s/rawr/wiki/Home>`__ provides with a customizable CSV containing ordered information gathered for each host, with a field for making notes/etc.; An elegant, searchable, JQuery-driven HTML report that shows screenshots, diagrams, and other information. A report on relevant security headers. In short, it provides a landscape of your webapplications. It takes input from multiple formats such as Nmap, Nessus, OpenVAS etc.
-      
+
 Information Gathering for http* Services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * `WhatWeb <http://www.morningstarsecurity.com/research/whatweb>`__ recognises web technologies including content management systems (CMS), blogging platforms, statistic/analytics packages, JavaScript libraries, web servers, and embedded device. `Tellmeweb <https://www.aldeid.com/wiki/Tellmeweb>`__ is a ruby script which reads a Nmap Gnmap file and runs whatweb against all identified open http and https ports. A `WhatWeb Result Parser <https://github.com/stevecoward/whatweb-parser>`__ has also been written which converts the results to CSV format. More information about advanced usage can be found at `Whatweb Advance Usage <https://github.com/urbanadventurer/WhatWeb/wiki/Advanced-Usage>`__.
-      
+
 * `Wapplyzer <http://wappalyzer.com>`__ is a Firefox plug-in. There are four ways (in my knowledge to do this) be loaded on browser. It works completely at the browser level and gives results in the form of icons.
 * `W3Tech <http://w3techs.com/>`__ is another Chrome plug-in which provides information about the usage of various types technologies on the web. It tells which web technologies are being used based on the crawling it has done. So example.com, x1.example.com, x2.example.com will show the same technologies as the domain is same (which is not correct).
-* `ChromeSnifferPlus <https://github.com/justjavac/ChromeSnifferPlus>`__ is another chrome extension which identifies the different web-technologies used by a website.      
+* `ChromeSnifferPlus <https://github.com/justjavac/ChromeSnifferPlus>`__ is another chrome extension which identifies the different web-technologies used by a website.
 * `BuiltWith <http://builtwith.com/>`__ is another website which provides a good amount of information about the different technologies used by website.
 
 
@@ -340,7 +351,7 @@ How to tune Nmap in ivre ?
 The Configuration file is : /etc/ivre.conf
 
 
-:: 
+::
 
   NMAP_SCAN_TEMPLATES["noping"]= {
      "traceroute": "True",
@@ -360,7 +371,7 @@ The Configuration file is : /etc/ivre.conf
   }
 
 
-:: 
+::
 
   NMAP_SCAN_TEMPLATES["aggressive"] = NMAP_SCAN_TEMPLATES["default"].copy()
   NMAP_SCAN_TEMPLATES["aggressive"].update({
@@ -376,14 +387,14 @@ How to get all CN certs from ivre ?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 **From Scancli**
 
-:: 
+::
 
  ivre scancli --distinct ports.scripts.ssl-cert.subject.
 
 
 OR
 
-:: 
+::
 
  ivre scancli --distinct ports.scripts.ssl-cert.subject | python -c "import ast,json,sys
 for l in sys.stdin: print(json.dumps(ast.literal_eval(l)))" | jq .commonName
@@ -391,16 +402,16 @@ for l in sys.stdin: print(json.dumps(ast.literal_eval(l)))" | jq .commonName
 
 **From Python API**
 
-:: 
+::
 
- db.nmap.searchscript(name='ssl-cert', values={'subject.commonName': {'$exists': True}}) or, preferably 
+ db.nmap.searchscript(name='ssl-cert', values={'subject.commonName': {'$exists': True}}) or, preferably
 
 
 OR
 
-:: 
+::
 
-db.nmap.searchscript(name='ssl-cert', values={'subject.commonName': re.compile('')} 
+db.nmap.searchscript(name='ssl-cert', values={'subject.commonName': re.compile('')}
 
 
 > Not formally the same meaning, but the latter is more portable and should work with PostgreSQL backend.

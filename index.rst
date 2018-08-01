@@ -8,6 +8,7 @@ Welcome to Ptest Method's documentation!
 
 This Repo will be my knowledge database about Pentesting skills. It has been inspired by https://bitvijays.github.io And some of the content will be the same as a starting point.
 
+Always keep in mind when you have a problem just launch a search over internet about it, 99 % of the time the comunity already sollved this issue.
 
 #####################
 The Essentials Series

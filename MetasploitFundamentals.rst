@@ -7212,6 +7212,23 @@ We will want to gain further access to the targets internal networks by pivoting
 
 Utilizing these techniques will ensure that we maintain some level of access and can potentially lead to deeper footholds into the targets trusted infrastructure.
 
+
+Running Powershell scripts
+==========================
+
+
+There’s a Metasploit module for running powershell commands through a session,
+
+::
+
+   post/windows/manage/powershell/exec_powershell
+
+Before you use this module, first append the desired function and any arguments (i.e. “Invoke-StealthUserHunter”) to the end of powerview.ps1 on your attacker machine, and then specify the local path to the script in the module options.
+
+Metasploit will upload the script, run it on the target, retrieve the results and save them back to your local machine.
+
+
+
 Privilege Escalation
 =====================
 
