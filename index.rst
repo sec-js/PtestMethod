@@ -88,6 +88,16 @@ Here you will find the documentation of some tools.
    MetasploitFundamentals
 
 
+#############################
+Other Tools
+#############################
+
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Other Usefull Tools Doc
+
+   pupy
 
 #####################
 Obligatory Disclaimer
