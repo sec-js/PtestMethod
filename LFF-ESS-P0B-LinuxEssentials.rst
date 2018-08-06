@@ -1231,12 +1231,3 @@ Interesting Stuff
 * Linux Monitoring Tools : Server density has written most comprehensive list of `80 Linux Monitoring Tools <https://www.serverdensity.com/monitor/linux/how-to/>`_
 
 * Windows Monitoring Tools : Server density has written similar list for Windows too `60+ Windows Monitoring Tools <https://www.serverdensity.com/monitor/windows/how-to/>`_
-
-Changelog
-=========
-.. git_changelog::
-  :filename_filter: docs/LFF-ESS-P0B-LinuxEssentials.rst
-  :hide_date: false
-
-
-.. disqus::

@@ -2,7 +2,7 @@
 Configuration Review
 ************************************************************
 
-So far, we have discussed about the IT infrastructure penetration testing in which plethora of attacking methods, tools, commands were explained. Now it's time get our hands dirty with the secure configuration re`view of network devices. 
+So far, we have discussed about the IT infrastructure penetration testing in which plethora of attacking methods, tools, commands were explained. Now it's time get our hands dirty with the secure configuration re`view of network devices.
 Often in an engagement we are required to perform a secure configuration review of network devices such as routers, switches, firewalls etc. We will try to cover devices by different vendors.
 
 Introduction
@@ -18,7 +18,7 @@ These devices operate at layer 3 of OSI model connect and route data between net
 Switches
 --------
 
-Unlike hub which takes a frame that it receives on any given port and repeats it out to every port on the hub, A switch is an intelligent learning device which learns the MAC address for each host plugged into the switch ports. 
+Unlike hub which takes a frame that it receives on any given port and repeats it out to every port on the hub, A switch is an intelligent learning device which learns the MAC address for each host plugged into the switch ports.
 With this information, the switch will repeat a frame only out to the port that contains the correct destination MAC address.
 
 Firewalls
@@ -28,7 +28,7 @@ These are the main devices which protect us in a day to day activities by carefu
 
 * Packet filtering Firewall : These are essentially routers operating at Layer 3 using set ACLs. Decisions are made to allow and disallow traffic based on the source and destination IP address, protocol, and port number.
 * Stateful Inspection firewall : Also known as stateful packet inspection (SPI) or dynamic packet-filtering firewall which operates at Layers 3 and 4. A router at home allows us to establish and maintain a session externally with another address. The “state” refers to identifying and tracking sessions that occur in Layers 4 and 5. The rules are changed       					  dynamically when we establish an outbound connection to enable packets from the destination IP address to be returned to you. All other traffic is stopped from reaching our computer, protecting us from the dangers from Internet.
-* Application Firewalls : These firewalls combine the functionality of the typical firewall operating in the lower OSI layers with the power and deep inspection of application awareness. Based on the information at the application level, such as known malicious traffic, decisions can be made to allow or disallow traffic. for example an appliance or host that 	                                    screens web traffic before it hits our web server,based on the behavior and content of the web traffic, decisions might be made to refuse access to the web server. 
+* Application Firewalls : These firewalls combine the functionality of the typical firewall operating in the lower OSI layers with the power and deep inspection of application awareness. Based on the information at the application level, such as known malicious traffic, decisions can be made to allow or disallow traffic. for example an appliance or host that 	                                    screens web traffic before it hits our web server,based on the behavior and content of the web traffic, decisions might be made to refuse access to the web server.
 
 Now lets begin our quest to configuration reviews.
 
@@ -38,11 +38,11 @@ Broadly speaking, the configuration review/ Hardening checks can be categorized 
 * Data Plane : This forwards data through a network device and it doesn't include traffic that is sent to the local IOS device.
 * Control Plane : This plane processes the traffic, which is very important to maintain the functionality of the network infrastructure. It consists of applications and protocols between the devices.
 
- 
+
 Cisco Devices
 =============
 
-Its always recommended to perform a manual review for the devices. The manual approach may take time but its the best way to learn the IOS configuration commands as well. First and foremost, we need to obtain the configuration file of the device. 
+Its always recommended to perform a manual review for the devices. The manual approach may take time but its the best way to learn the IOS configuration commands as well. First and foremost, we need to obtain the configuration file of the device.
 To do so we will talk a bit about various modes present in CISCO devices.
 
 ::
@@ -54,12 +54,12 @@ To do so we will talk a bit about various modes present in CISCO devices.
 Now to pull out the configuration of the device one of the simplest way is by using telnet (Though its an insecure protocol, Its just a method)
 
 ::
- 
+
  Router# show runnning-config
 
 
-There are many ways to save the configuration into a text file like saving the config to a tftp/ftp server and then get the file from there etc. But the simplest way is by using Putty emulator, 
-for this we just have to enable the logging section under the sessions tab.   
+There are many ways to save the configuration into a text file like saving the config to a tftp/ftp server and then get the file from there etc. But the simplest way is by using Putty emulator,
+for this we just have to enable the logging section under the sessions tab.
 
 
 .. Note :: telnet -f fileName.txt xx.xx.xx.xx This will directly save the telnet session in a text file. (Though its an insecure protocol, Its just a method.)
@@ -67,7 +67,7 @@ for this we just have to enable the logging section under the sessions tab.
 Tools
 =====
 
-So, Now that we have a running configuration file of the device the next step would be to perform a security review for the device. 
+So, Now that we have a running configuration file of the device the next step would be to perform a security review for the device.
 for the manual review we will discuss few pointers which can be checked in no time.
 
 
@@ -85,13 +85,13 @@ for the manual review we will discuss few pointers which can be checked in no ti
 * Risky services such as Telnet, HTTP, Finger etc. should be disabled.
 * Based upon the requiremnet of no.of VTY lines (provides logical connections to the device) should be limited.
 * Auxilliary console should be disabled.
-* All the console options such as console line, Aux Line, and VTY lines should be configured with 10 minutes of timeout.  
+* All the console options such as console line, Aux Line, and VTY lines should be configured with 10 minutes of timeout.
 * VTY line should be configured with proper access contorl lines (ACL) in case of routers and switches.
 
 Nipper
 ------
 
-Nipper is a very handy tool which is by default available in Kali linux. This tool is a cli based and can be utilised to perform some basic checks related to firmware version, device control etc. Its also available as a paid version and n trial version 
+Nipper is a very handy tool which is by default available in Kali linux. This tool is a cli based and can be utilised to perform some basic checks related to firmware version, device control etc. Its also available as a paid version and n trial version
 with limited amount of devices to be audited. However, the inbuilt nipper module in kali linux sometimes gives a lot of false positives, but for a start this also gives some juicy information.
 
 ::
@@ -103,7 +103,7 @@ with limited amount of devices to be audited. However, the inbuilt nipper module
      --output=<file> | --report=<file> : Specified an output file for the report.
      --csv=<file> : Want to output the network filtering configuration to a CSV file?.
      --version : Displays the program version.
- 
+
  Example usage: nipper --ios-router --input=ios.conf --output=report.html (for cisco routers)
 
 Nipper also supports various devices such as juniper Netscreen Firewall, Sonicwall firewall, checkpoint firewall, cisco firewalls.
@@ -112,9 +112,9 @@ Nipper also supports various devices such as juniper Netscreen Firewall, Sonicwa
 Nessus (Professional version)
 -----------------------------
 
-Nessus pro. is great tool which can be used for auditing various platforms such ios, Windows, Unix, IBM iseries, Junos, Extreme OS etc. one of the major features of Nessus professional version is offline configuration of sensitive devices. However, this features only gives compliance audit results. 
+Nessus pro. is great tool which can be used for auditing various platforms such ios, Windows, Unix, IBM iseries, Junos, Extreme OS etc. one of the major features of Nessus professional version is offline configuration of sensitive devices. However, this features only gives compliance audit results.
 
-Below are a few steps for an offline configuration audit. 
+Below are a few steps for an offline configuration audit.
 
 * To create an offline configuration audit, select the Offline Config Audit in the new Policies library.
 * To see the compliance options, click on the Compliance menu. This will bring up options different than the standard compliance audit.
@@ -130,8 +130,8 @@ A more recent option (which we haven't tried yet) is the Nessus IOS plugin from 
 rConfig
 -------
 
-It is a free and open source network device configuration management utility for network engineers to take frequent configuration snapshots of their network devices. This can be utilized for viewing and extracting out the configuration of network devices in 
-order to perform analysis of the network communication in devices perspective. rConfig Version 3 now has a Configuration Compliance Management utility to enable you to monitor device configurations for policy compliance. Refer to the tutorial and 
+It is a free and open source network device configuration management utility for network engineers to take frequent configuration snapshots of their network devices. This can be utilized for viewing and extracting out the configuration of network devices in
+order to perform analysis of the network communication in devices perspective. rConfig Version 3 now has a Configuration Compliance Management utility to enable you to monitor device configurations for policy compliance. Refer to the tutorial and
 usage of this tool `Rconfig <https://www.rconfig.com/>`_.
 
 More ad hoc (single-function) tools can be found at `PacketStorm <http://packetstormsecurity.org/cisco/page1/>`_ and `cymru <http://www.cymru.com/Tools/index.html>`_.
@@ -147,21 +147,21 @@ Refer `Solarwinds Network Configuration Manager <https://www.solarwinds.com/-/me
 ciscoconfparse
 --------------
 
-`CiscoConfParse <https://pypi.org/project/ciscoconfparse/>`_ is an open-source audit toolset that lets us express the audit as Python code. It is a Python library, which parses through Cisco IOS-style configurations. It can be used for the following: 
+`CiscoConfParse <https://pypi.org/project/ciscoconfparse/>`_ is an open-source audit toolset that lets us express the audit as Python code. It is a Python library, which parses through Cisco IOS-style configurations. It can be used for the following:
 
 * Audit existing router / switch / firewall / wlc configurations
 * Retrieve portions of the configuration
 * Modify existing configurations
 * Build new configurations
 
-Refer the documentation `Cisco-Conf-Parse <http://www.pennington.net/py/ciscoconfparse/>`_. 
+Refer the documentation `Cisco-Conf-Parse <http://www.pennington.net/py/ciscoconfparse/>`_.
 
 Tuffin Orchestration Suite
 --------------------------
 
-The Tufin Orchestration Suite intelligently analyzes the network, automates configuration changes and proactively maintains security and compliance across the entire enterprise network. It comprises three products: 
+The Tufin Orchestration Suite intelligently analyzes the network, automates configuration changes and proactively maintains security and compliance across the entire enterprise network. It comprises three products:
 * SecureTrack dashboard (change tracking, risk analysis, etc.)
-* SecureChange (change automation-ticketing) - A comprehensive solution for automating network configuration changes to firewalls and routers. 
+* SecureChange (change automation-ticketing) - A comprehensive solution for automating network configuration changes to firewalls and routers.
 * SecureApp - An automated solution that enables organizations to easily define, update, monitor and remove applications and services from the network.
 
 refer `Tufin toc <https://forum.tufin.com/support/kc/latest/index.htm?toc.htm?2697.htm>`_ for installations and usage guidelines.
@@ -170,14 +170,14 @@ refer `Tufin toc <https://forum.tufin.com/support/kc/latest/index.htm?toc.htm?26
 Solarwinds FSM
 --------------
 
-Firewall security manager by solarwinds is a good for offline configuration audit (Rule base) of cisco firewalls and other vendors. Although its a commercial product released by solarwinds, it is available for free trial which supports at least 1 device for the reneiw purpose. 
+Firewall security manager by solarwinds is a good for offline configuration audit (Rule base) of cisco firewalls and other vendors. Although its a commercial product released by solarwinds, it is available for free trial which supports at least 1 device for the reneiw purpose.
 Upon successful import of config. file the solarwinds will generate 3 pdf files related to Rulebase review, firewall rule optimization and clean up, rules page. This tool also gives a tabulated view of various ingress and egress points of a firewall.
 For details Refer `Firewall Security Management <https://www.solarwinds.com/topics/firewall-security-management>`_.
 
 Springbok
 ---------
 
-It is a good open source firewall visualization tool which creates a visual map of firewall ingress and egress points which can be used to analyze the traffic flow from different nodes integrated. It also 
+It is a good open source firewall visualization tool which creates a visual map of firewall ingress and egress points which can be used to analyze the traffic flow from different nodes integrated. It also
 provides the feature of viewing the rules and analyze them according to the integrated nodes.
 
 For details regarding usage and installation refer `Springbok <https://github.com/conix-security/springbok>`_.
@@ -189,7 +189,7 @@ Feel free to add more tools and software's which we might have missed.
 End-Point Review
 ================
 
-We are often required to perform end-point review for operating systems for windows and linux on our own in some engagements. Here i will be discussing about few of the commands and tools required for auditing the operating systems. 
+We are often required to perform end-point review for operating systems for windows and linux on our own in some engagements. Here i will be discussing about few of the commands and tools required for auditing the operating systems.
 
 Windows Operating Systems
 -------------------------
@@ -201,12 +201,12 @@ Displays the Resultant Set of Policy (RSoP) information for a remote user and co
 
 Usage
 
-:: 
+::
 
  gpresult [/s <compUTER> [/u <USERNAME> [/p [<PASSWOrd>]]]] [/user [<TARGETDOMAIN>\]<TARGETUSER>] [/scope {user | computer}] {/r | /v | /z | [/x | /h] <FILENAME> [/f] | /?}
 
-The following example displays RSoP data for the computer srvmain and the logged-on user. Data is included about both the user and the computer. The command is run with the credentials of the user maindom\hiropln, and p@ssW23 is entered as the 
-password for that user. 
+The following example displays RSoP data for the computer srvmain and the logged-on user. Data is included about both the user and the computer. The command is run with the credentials of the user maindom\hiropln, and p@ssW23 is entered as the
+password for that user.
 
 ::
 
@@ -216,12 +216,12 @@ password for that user.
 Net Accounts
 ^^^^^^^^^^^^
 
-This is a native windows command for acquires account related information such as password complexity, Password expiration, No. of passwords to be remembered, Lockout Duration etc. 
+This is a native windows command for acquires account related information such as password complexity, Password expiration, No. of passwords to be remembered, Lockout Duration etc.
 
 Usage
 
-:: 
- 
+::
+
  Net Accounts            - View the current password & logon restrictions for the computer
  Net Accounts /Domain    - View the current password & logon restrictions for the domain.
  NET USER [/DOMAIN]      - View user account details
@@ -231,7 +231,7 @@ WMIC.exe
 
 Windows Management Instrumentation Command : Retrieve a huge range of information about local or remote computers. Make configuration changes to multiple remote machines.
 
-Refer `Here <https://ss64.com/nt/wmic.html>`_ for more information on usage. 
+Refer `Here <https://ss64.com/nt/wmic.html>`_ for more information on usage.
 
 
 Applications installed
@@ -242,7 +242,7 @@ We also have to look for vulnerable applications installed by getting a comprehe
 ::
 
  Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate | Format-Table AutoSize > File.txt
-                         
+
 
 auditpol
 ^^^^^^^^
@@ -251,11 +251,11 @@ We also need to look for the audit policies defined for systems/ Servers in orde
 
 Usage
 
-:: 
- 
+::
+
  Auditpol command [<sub-command><options>]
- 
- auditpol /get 
+
+ auditpol /get
  [/user[:<username>|<{sid}>]]
  [/category:*|<name>|<{guid}>[,:<name|<{guid}> ]]
  [/subcategory:*|<name>|<{guid}>[,:<name|<{guid}> ]]
@@ -265,13 +265,13 @@ Usage
 
 Refer `Auditpol-Get <https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/auditpol-get>`_.
 
-Simply issue 
+Simply issue
 
-:: 
+::
 
  auditpol /get /category:* > Audit_Policy.txt
 
-For extracting the audit policy. 
+For extracting the audit policy.
 
 PolicyAnalyzer
 ^^^^^^^^^^^^^^
@@ -307,7 +307,7 @@ SolarWinds Permission Analyzer
 * Analyze user permissions based on group membership and permissions
 
 The only issue here with this tool is that it doesn't generate a report rather it just displays the file permissions associated.
- 
+
 
 Linux Operating systems
 -----------------------
@@ -323,8 +323,8 @@ unix-privesc-check
 ^^^^^^^^^^^^^^^^^^
 
 `Unix-privesc-checker <http://pentestmonkey.net/tools/unix-privesc-check/unix-privesc-check-1.4.tar.gz>`_ is a script that runs on Unix systems (tested on Solaris 9, HPUX 11, Various Linuxes, FreeBSD 6.2).  It tries to find misconfiguration that could allow local unprivilged users to escalate privileges to other users or to access local apps (e.g. databases). t is written as a single shell script so it can be easily uploaded and run.
-It looks for the following 
-  
+It looks for the following
+
 * Writable Home Directories
 * Readable /etc/shadow
 * Weak Permissions On Cron Jobs
@@ -353,57 +353,8 @@ Few features of LSAT is listed below:
 * checkipv4: Checks to see that common forwarding and ignoring are off/on in ipv4.
 * checklimits: Performs simple check of limits.conf file
 * checklogging: Performs a simple check to see if auth and authpriv logging facilities are on.
- 
+
 Lynis
 ^^^^^
 
 `Lynis <https://cisofy.com/lynis/>`_ is an open source linux security auditing tool. The primary goal is to help users with auditing and hardening of Unix and Linux based systems. The software is very flexible and runs on almost every Unix based system (including Mac). Lynis performs hundreds of individual tests. Each test will help to determine the security state of the system. Each test is written in shell script and has its own identifier.
-
- 
-Changelog
-=========
-.. git_changelog::
-  :filename_filter: docs/LFF-IPS-P6-ConfigurationReview.rst
-  :hide_date: false
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
- 
-  

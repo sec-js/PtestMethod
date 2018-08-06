@@ -9,11 +9,11 @@ Pupy can load the python interpreter from memory and load any python module remo
 You can then access objects on the client side from the serverside transparently with the awesome rpyc library.
 Pupy can be used for various purposes :
 
-    security research
-    education
-    pentesting
-    administration
-    projects and developments around privacy in python that require very low disk footprints
+* security research
+* education
+* pentesting
+* administration
+* projects and developments around privacy in python that require very low disk footprints
     ...
 
 
@@ -34,6 +34,8 @@ Installation
  wget https://github.com/n1nj4sec/pupy/releases/download/latest/payload_templates.txz
  tar xvf payload_templates.txz && mv payload_templates/* pupy/payload_templates/ && rm payload_templates.txz && rm -r payload_templates
 
+You may need to install impacket from https://www.coresecurity.com/corelabs-research/open-source-tools/impacket
+
 
 
 Features
@@ -42,13 +44,13 @@ Features
  - Multi-platform (tested on windows xp, 7, 8, 10, kali linux, ubuntu, osx, android)
  - On windows, the Pupy payload can be compiled as a reflective DLL and the whole python interpreter is loaded from memory. Pupy does not touch the disk :)
  - pupy can also be packed into a single .py file and run without any dependencies other that the python standard library on all OS
-     - pycrypto gets replaced by pure python aes && rsa implementations when unavailable
+ - pycrypto gets replaced by pure python aes && rsa implementations when unavailable
  - Pupy can reflectively migrate into other processes
  - Pupy can remotely import, from memory, pure python packages (.py, .pyc) and compiled python C extensions (.pyd, .so). The imported python modules do not touch the disk.
  - Pupy is easily extensible, modules are quite simple to write, sorted by os and category.
  - A lot of awesome modules are already implemented!
  - Pupy uses [rpyc](https://github.com/tomerfiliba/rpyc) and a module can directly access python objects on the remote client
-   - We can also access remote objects interactively from the pupy shell and you even get auto-completion of remote attributes!
+ - We can also access remote objects interactively from the pupy shell and you even get auto-completion of remote attributes!
  - Communication transports are modular, stackable and awesome. You could exfiltrate data using HTTP over HTTP over AES over XOR. Or any combination of the available transports !
  - Pupy can communicate using obfsproxy [pluggable transports](https://www.torproject.org/docs/pluggable-transports.html.en)
  - All the non interactive modules can be dispatched to multiple hosts in one command
